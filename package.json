@@ -1,0 +1,33 @@
+{
+  "name": "web-ide",
+  "version": "1.0.0",
+  "description": "Full stack application with React client and Express server",
+  "main": "index.js",
+  "scripts": {
+    "client": "cd client && pnpm start",
+    "server": "cd server && pnpm run dev",
+    "dev": "concurrently \"pnpm run server\" \"pnpm run client\"",
+    "install:all": "pnpm install && cd client && pnpm install && cd ../server && pnpm install"
+  },
+  "keywords": [
+    "react",
+    "express",
+    "tailwind",
+    "fullstack"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "autoprefixer": "10.4.15",
+    "concurrently": "^8.2.2",
+    "postcss": "8.4.28",
+    "tailwindcss": "3.3.3"
+  },
+  "dependencies": {
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "react-icons": "4.10.1",
+    "react-scripts": "5.0.1",
+    "web-vitals": "2.1.4"
+  }
+}
