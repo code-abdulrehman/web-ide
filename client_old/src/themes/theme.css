@@ -1,0 +1,90 @@
+/* Theme-related styles */
+
+/* Allow the theme colors to be used as CSS variables */
+:root {
+  /* Default fallback colors */
+  --editor-background: #1e1e1e;
+  --editor-foreground: #d4d4d4;
+}
+
+/* Apply CSS variables to elements */
+.code-editor {
+  background-color: var(--editor-background);
+  color: var(--editor-foreground);
+}
+
+.editor-line-number {
+  color: var(--editorLineNumber-foreground);
+}
+
+.editor-cursor {
+  background-color: var(--editorCursor-foreground);
+}
+
+.editor-selection {
+  background-color: var(--editor-selectionBackground);
+}
+
+.statusbar {
+  background-color: var(--statusBar-background);
+  color: var(--statusBar-foreground);
+}
+
+.terminal {
+  background-color: var(--terminal-background);
+  color: var(--terminal-foreground);
+}
+
+.activity-bar {
+  background-color: var(--activityBar-background);
+}
+
+.activity-bar-item {
+  color: var(--activityBar-foreground);
+}
+
+.sidebar {
+  background-color: var(--sideBar-background);
+  color: var(--sideBar-foreground);
+}
+
+.list-item:hover {
+  background-color: var(--list-hoverBackground);
+}
+
+.list-item.active {
+  background-color: var(--list-activeSelectionBackground);
+  color: var(--list-activeSelectionForeground);
+}
+
+/* Terminal ANSI colors */
+.terminal-black { color: var(--terminal-ansiBlack); }
+.terminal-red { color: var(--terminal-ansiRed); }
+.terminal-green { color: var(--terminal-ansiGreen); }
+.terminal-yellow { color: var(--terminal-ansiYellow); }
+.terminal-blue { color: var(--terminal-ansiBlue); }
+.terminal-magenta { color: var(--terminal-ansiMagenta); }
+.terminal-cyan { color: var(--terminal-ansiCyan); }
+.terminal-white { color: var(--terminal-ansiWhite); }
+
+.terminal-bright-black { color: var(--terminal-ansiBrightBlack); }
+.terminal-bright-red { color: var(--terminal-ansiBrightRed); }
+.terminal-bright-green { color: var(--terminal-ansiBrightGreen); }
+.terminal-bright-yellow { color: var(--terminal-ansiBrightYellow); }
+.terminal-bright-blue { color: var(--terminal-ansiBrightBlue); }
+.terminal-bright-magenta { color: var(--terminal-ansiBrightMagenta); }
+.terminal-bright-cyan { color: var(--terminal-ansiBrightCyan); }
+.terminal-bright-white { color: var(--terminal-ansiBrightWhite); }
+
+/* Theme type classes */
+.theme-dark {
+  /* Dark theme specific overrides */
+}
+
+.theme-light {
+  /* Light theme specific overrides */
+}
+
+.theme-hc {
+  /* High contrast theme specific overrides */
+} 

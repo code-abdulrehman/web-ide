@@ -1,0 +1,341 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base styles */
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  height: 100vh;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Hide scrollbars while keeping functionality */
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* Custom scrollbars for other elements */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.5);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.7);
+}
+
+/* Panel resize handle styles */
+.panel-resize-handle {
+  position: relative;
+  z-index: 10;
+  width: 4px !important;
+  background-color: rgba(127, 127, 127, 0.2);
+  transition: all 0.2s ease;
+}
+
+.panel-resize-handle:hover {
+  background-color: rgba(0, 120, 212, 0.6) !important;
+  width: 6px !important;
+  margin: 0 -1px;
+}
+
+.panel-resize-handle:active {
+  background-color: rgba(0, 120, 212, 0.8) !important;
+  width: 6px !important;
+  margin: 0 -1px;
+}
+
+/* Cursor styles */
+.cursor-row-resize {
+  cursor: row-resize !important;
+}
+
+.cursor-col-resize {
+  cursor: col-resize !important;
+}
+
+/* Typing animation for terminal */
+.typing-indicator {
+  display: inline-flex;
+  align-items: center;
+}
+
+.typing-indicator span {
+  height: 5px;
+  width: 5px;
+  margin: 0 1px;
+  background-color: #999;
+  border-radius: 50%;
+  display: inline-block;
+  opacity: 0.4;
+}
+
+.typing-indicator span:nth-child(1) {
+  animation: bounce 1s infinite 0.1s;
+}
+.typing-indicator span:nth-child(2) {
+  animation: bounce 1s infinite 0.3s;
+}
+.typing-indicator span:nth-child(3) {
+  animation: bounce 1s infinite 0.5s;
+}
+
+@keyframes bounce {
+  50% {
+    opacity: 1;
+    transform: translateY(-5px);
+  }
+  100% {
+    opacity: 0.4;
+    transform: translateY(0);
+  }
+}
+
+/* Monaco editor customizations */
+.monaco-editor {
+  z-index: 1 !important;
+}
+
+.monaco-editor .current-line {
+  border: none !important;
+  margin-left: 3px !important;
+  background-color: rgba(100, 100, 100, 0.1) !important;
+}
+
+/* Terminal customizations */
+.terminal-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.terminal-container.in-sidebar {
+  border-top: none;
+}
+
+/* Window controls */
+.window-controls {
+  -webkit-app-region: no-drag;
+  display: flex;
+}
+
+.window-control-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+
+.window-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+
+/* Fix for RTL languages */
+[dir="rtl"] .monaco-editor .margin-view-overlays .line-numbers {
+  text-align: left;
+}
+
+/* Ensure panels don't overflow */
+.panel {
+  overflow: hidden !important;
+}
+
+/* Ensure Monaco editor takes full width and height */
+.monaco-editor, 
+.overflow-guard {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Resize handle styles */
+.panel-resize-handle {
+  background-color: rgba(127, 127, 127, 0.2);
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.panel-resize-handle:hover {
+  background-color: rgba(0, 120, 212, 0.6) !important;
+  width: 6px !important;
+  margin: 0 -1px;
+}
+
+.panel-resize-handle:active {
+  background-color: rgba(0, 120, 212, 0.8) !important;
+  width: 6px !important;
+  margin: 0 -1px;
+}
+
+/* Panel styles */
+[data-panel] {
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+[data-panel-handle] {
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+[data-panel-handle="horizontal"] {
+  width: 4px;
+  cursor: col-resize !important;
+  transition: all 0.2s ease;
+}
+
+[data-panel-handle="horizontal"]:hover {
+  width: 6px !important;
+  background-color: rgba(0, 120, 212, 0.6) !important;
+}
+
+[data-panel-handle="horizontal"].active,
+[data-panel-handle="horizontal"]:active {
+  width: 6px !important;
+  background-color: rgba(0, 120, 212, 0.8) !important;
+}
+
+/* Ensure non-resizable panels don't show resize cursor */
+.non-resizable {
+  cursor: default !important;
+}
+
+.non-resizable * {
+  cursor: default !important;
+}
+
+/* Terminal specific styles */
+.terminal-content {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+.terminal-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.terminal-panel .terminal-content {
+  flex-grow: 1;
+  overflow: auto;
+}
+
+/* Border styles to match VS Code appearance */
+.border-t, .border-b, .border-l, .border-r, .border {
+  border-color: rgba(128, 128, 128, 0.35);
+}
+
+/* Theme transition for smooth theme switching */
+body, div, button, span, p {
+  transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+}
+
+/* Window control buttons hover effects */
+.window-control-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.window-close-btn:hover {
+  background-color: rgba(232, 17, 35, 0.9);
+}
+
+/* Typing indicator animation */
+.typing-indicator {
+  display: flex;
+  align-items: center;
+}
+
+.typing-indicator span {
+  height: 6px;
+  width: 6px;
+  margin: 0 2px;
+  background-color: rgba(255, 255, 255, 0.5);
+  display: block;
+  border-radius: 50%;
+  opacity: 0.4;
+}
+
+.typing-indicator span:nth-of-type(1) {
+  animation: typing 1s infinite;
+}
+
+.typing-indicator span:nth-of-type(2) {
+  animation: typing 1s 0.33s infinite;
+}
+
+.typing-indicator span:nth-of-type(3) {
+  animation: typing 1s 0.66s infinite;
+}
+
+@keyframes typing {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+/* Add back the Monaco editor adjustments */
+
+/* Monaco editor adjustments */
+.monaco-editor .editor-widget {
+  z-index: 50;
+}
+
+/* Add a highlighted effect for active line in editor */
+.monaco-editor .current-line {
+  border: none !important;
+  background-color: rgba(60, 60, 60, 0.5);
+}
+
+/* Ensure proper z-index for the monaco editor */
+.monaco-editor {
+  z-index: 1;
+}
+
+/* Editor container - prevent resize cursor */
+.editor-container {
+  width: 100%;
+  height: 100%;
+  cursor: default !important;
+}
+
+.overflow-hidden .non-resizable {
+  flex: 1 1 10px !important;
+}
+
+kbd {
+  @apply text-xs border border-gray-700 rounded-md px-1;
+  font-family: monospace;
+}
