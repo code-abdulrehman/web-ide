@@ -201,6 +201,7 @@ const KeybindingsTab = ({ theme, formSettings, setFormSettings }) => {
                   type="text"
                   placeholder="Key"
                   value={newShortcutKey}
+                  onChange={(e) => {/* We handle this with onKeyDown */}}
                   onKeyDown={handleNewShortcutKeyDown}
                   className={`w-8 bg-transparent focus:outline-none ${theme.foreground}`}
                   maxLength={1}
@@ -249,41 +250,36 @@ const KeybindingsTab = ({ theme, formSettings, setFormSettings }) => {
                           <input
                             type="text"
                             ref={keyRecordRef}
-                            className={`flex-1 px-3 py-1 mr-2 rounded ${theme.inputBackground} focus:outline-none font-mono`}
-                            placeholder="Press keys..."
+                            className={`bg-transparent border border-blue-500 rounded px-2 py-1 focus:outline-none ${theme.foreground}`}
                             value={newShortcut}
+                            onChange={(e) => {/* We handle this with onKeyDown */}}
                             onKeyDown={handleKeyDown}
-                            readOnly
+                            placeholder="Press a key"
+                            autoFocus
                           />
+                          
                           <Button
                             theme={theme}
-                            variant="primary"
-                            size="sm"
-                            className="mr-1"
+                            variant="ghost"
                             onClick={saveKeyboardShortcut}
+                            className="ml-2"
                             disabled={!newShortcut}
                           >
                             Save
                           </Button>
+                          
                           <Button
                             theme={theme}
-                            variant="secondary"
-                            size="sm"
+                            variant="ghost"
                             onClick={cancelKeyRecording}
+                            className="ml-1"
                           >
                             Cancel
                           </Button>
                         </div>
                       ) : (
-                        <div className="flex gap-1 font-mono">
-                          {kb.keys.split('+').map((key, index) => (
-                            <span 
-                              key={index} 
-                              className={`flex justify-center items-center min-w-6 h-6 px-1.5 bg-gray-800 bg-opacity-70 rounded ${index < kb.keys.split('+').length - 1 ? 'mr-1' : ''}`}
-                            >
-                              {key}
-                            </span>
-                          ))}
+                        <div className="flex items-center">
+                          <span className="bg-gray-700 rounded px-2 py-1 text-sm">{kb.keys}</span>
                         </div>
                       )}
                     </td>

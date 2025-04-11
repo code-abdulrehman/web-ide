@@ -9,6 +9,8 @@ import {
   FaInfoCircle,
   FaTrash
 } from 'react-icons/fa';
+import { Terminal as XTerminal } from 'xterm';
+import { FitAddon } from 'xterm-addon-fit';
 
 // Memoized terminal history item to reduce re-renders
 const TerminalHistoryItem = memo(({ content, isPrompt, className }) => (
@@ -17,7 +19,7 @@ const TerminalHistoryItem = memo(({ content, isPrompt, className }) => (
   </div>
 ));
 
-// Optimized Terminal component
+// Simple Terminal component
 const Terminal = ({ 
   theme, 
   isVisible, 
@@ -29,6 +31,7 @@ const Terminal = ({
   const [terminals, setTerminals] = useState([
     { id: 1, name: 'bash', history: ['Welcome to Web IDE Terminal', '> '], input: '' }
   ]);
+  
   const [activeTerminal, setActiveTerminal] = useState(1);
   const [problems] = useState([
     { id: 1, type: 'error', message: 'Expected \';\' at line 42', file: 'src/components/App.js', line: 42, column: 24 },
@@ -36,7 +39,8 @@ const Terminal = ({
   ]);
   const [filterProblems, setFilterProblems] = useState('all');
   
-  const terminalInputRef = useRef(null);
+  const terminalRef = useRef(null);
+  const termInstanceRef = useRef(null);
   const prevInitialActiveTabRef = useRef(initialActiveTab);
   
   // Handle Tab Changes
@@ -55,97 +59,124 @@ const Terminal = ({
     }
   }, [initialActiveTab]);
   
-  // Focus terminal input when visible
+  // Initialize terminal
   useEffect(() => {
-    if (isVisible && activeTab === 'terminal' && terminalInputRef.current) {
-      terminalInputRef.current.focus();
-    }
-  }, [isVisible, activeTab, activeTerminal]);
+    if (!terminalRef.current) return;
 
-  // Handle terminal input change
-  const handleTerminalInput = (e, terminalId) => {
-    const updatedTerminals = terminals.map(term => {
-      if (term.id === terminalId) {
-        return { ...term, input: e.target.value };
+    // Need to make sure the terminal element is visible and has dimensions
+    const initializeTerminal = () => {
+      // Initialize XTerm.js
+      const term = new XTerminal({
+        cursorBlink: true,
+        theme: {
+          background: theme.terminalBackground || '#1e1e1e',
+          foreground: theme.terminalForeground || '#ffffff',
+        },
+        fontFamily: 'monospace',
+        fontSize: 14,
+        rows: 24,
+        cols: 80,
+      });
+
+      const fitAddon = new FitAddon();
+      term.loadAddon(fitAddon);
+      
+      // Open the terminal in the container
+      term.open(terminalRef.current);
+      
+      // Wait for a moment before fitting to ensure the DOM is ready
+      setTimeout(() => {
+        try {
+          fitAddon.fit();
+        } catch (e) {
+          console.error("Error fitting terminal:", e);
+        }
+      }, 100);
+      
+      termInstanceRef.current = term;
+
+      // Display welcome message
+      term.writeln('Welcome to Web IDE Terminal');
+      term.writeln('Type commands and press Enter to see simulated responses.');
+      term.writeln('');
+      
+      // Handle user input in terminal
+      term.onData((data) => {
+        // Process terminal input
+        if (data === '\r') {
+          // Process the current line when Enter is pressed
+          const currentLine = term.buffer.active.getLine(term.buffer.active.cursorY)?.translateToString();
+          
+          // Move to new line
+          term.writeln('');
+          
+          // Simple command simulation
+          if (currentLine.includes('mkdir')) {
+            term.writeln(`root@web-ide:~# ${currentLine.split(' ')[1]}`);
+            console.log(`Created directory: ${currentLine.split(' ')[1]}`);
+          } else if (currentLine.includes('ls')) {
+            term.writeln('README.md    package.json    node_modules/    src/    public/');
+            console.log('README.md    package.json    node_modules/    src/    public/');
+          } else if (currentLine.includes('cd')) {
+            term.writeln(`root@web-ide:~# ${currentLine.split(' ')[1]}`);
+            console.log(`Changed directory to: ${currentLine.split(' ')[1]}`);
+          } else if (currentLine.includes('clear')) {
+            term.clear();
+            console.log('Cleared terminal');
+          } else if (currentLine.trim() !== '') {
+            term.writeln(`root@web-ide:~# ${currentLine.trim()}`);
+            console.log(`root@web-ide:~# ${currentLine.trim()}`);
+          }
+          
+          // Show prompt
+          term.write('root@web-ide:~# ');
+        } else {
+          // Echo character input
+          term.write(data);
+        }
+      });
+
+      // Initial prompt
+      term.write('root@web-ide:~# ');
+    };
+    
+    // Initialize with a slight delay to ensure DOM is ready
+    setTimeout(initializeTerminal, 0);
+
+    // Clean up on unmount
+    return () => {
+      if (termInstanceRef.current) {
+        termInstanceRef.current.dispose();
       }
-      return term;
-    });
-    setTerminals(updatedTerminals);
-  };
+    };
+  }, [theme.terminalBackground, theme.terminalForeground, isVisible, activeTab]);
 
-  // Handle terminal command submission
-  const handleTerminalSubmit = (e, terminalId) => {
-    e.preventDefault();
-    
-    const terminal = terminals.find(t => t.id === terminalId);
-    if (!terminal || !terminal.input.trim()) return;
+  // Handle resize events
+  useEffect(() => {
+    const handleResize = () => {
+      if (termInstanceRef.current && terminalRef.current) {
+        try {
+          const fitAddon = new FitAddon();
+          termInstanceRef.current.loadAddon(fitAddon);
+          fitAddon.fit();
+        } catch (e) {
+          console.error("Error fitting terminal on resize:", e);
+        }
+      }
+    };
 
-    const command = terminal.input.trim();
-    let response = 'Command executed';
-    
-    // Simple command handling
-    if (command === 'clear') {
-      setTerminals(prevTerminals => 
-        prevTerminals.map(term => 
-          term.id === terminalId 
-            ? { ...term, history: ['Terminal cleared', '> '], input: '' }
-            : term
-        )
-      );
-      return;
-    } else if (command === 'help') {
-      response = 'Available commands: help, clear, ls, cd';
-    } else if (command === 'ls') {
-      response = 'README.md    package.json    node_modules/    src/    public/';
-    } else if (command.startsWith('cd ')) {
-      response = `Changed directory to ${command.substring(3)}`;
-    }
-    
-    // Update terminal history
-    const updatedHistory = [...terminal.history.slice(0, -1), `> ${command}`, response, '> '];
-    setTerminals(prevTerminals => 
-      prevTerminals.map(term => 
-        term.id === terminalId 
-          ? { ...term, history: updatedHistory, input: '' }
-          : term
-      )
-    );
-  };
-
-  // Add a new terminal
-  const addNewTerminal = () => {
-    const newId = terminals.length > 0 ? Math.max(...terminals.map(t => t.id)) + 1 : 1;
-    setTerminals([...terminals, { 
-      id: newId, 
-      name: 'bash', 
-      history: ['Welcome to Web IDE Terminal', '> '], 
-      input: '' 
-    }]);
-    setActiveTerminal(newId);
-  };
-
-  // Close a terminal
-  const closeTerminal = (id, e) => {
-    if (e) e.stopPropagation();
-    if (terminals.length === 1) return;
-    
-    const updatedTerminals = terminals.filter(term => term.id !== id);
-    setTerminals(updatedTerminals);
-    
-    if (activeTerminal === id) {
-      setActiveTerminal(updatedTerminals[0].id);
-    }
-  };
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
 
   // Clear the terminal
   const clearTerminal = () => {
-    setTerminals(prevTerminals => 
-      prevTerminals.map(term => 
-        term.id === activeTerminal 
-          ? { ...term, history: ['Terminal cleared', '> '], input: '' }
-          : term
-      )
-    );
+    if (termInstanceRef.current) {
+      termInstanceRef.current.clear();
+      termInstanceRef.current.write('$ ');
+    }
   };
 
   // Render the terminal tabs
@@ -162,24 +193,8 @@ const Terminal = ({
           >
             <FaTerminal className={activeTerminal === term.id ? theme.iconActiveColor : theme.iconColor} size={12} />
             <span className={`ml-2 ${theme.foreground}`}>{term.name}</span>
-            {terminals.length > 1 && (
-              <button
-                className={`ml-2 p-0.5 rounded-sm hover:${theme.buttonHoverBackground}`}
-                onClick={(e) => closeTerminal(term.id, e)}
-              >
-                <FaTimes size={10} className={theme.iconColor} />
-              </button>
-            )}
           </div>
         ))}
-        
-        <button
-          className={`px-2 flex items-center justify-center hover:${theme.buttonHoverBackground}`}
-          onClick={addNewTerminal}
-          title="New Terminal"
-        >
-          <FaPlus className={theme.iconColor} size={10} />
-        </button>
         
         <div className="ml-auto">
           <button 
@@ -196,39 +211,13 @@ const Terminal = ({
 
   // Render the terminal content
   const renderTerminalContent = () => {
-    const terminal = terminals.find(t => t.id === activeTerminal);
-    if (!terminal) return null;
-    
     return (
-      <div className={`flex-1 flex flex-col justify-between overflow-hidden`}>
-        {/* Terminal output - use virtualization for large outputs */}
-        <div className={`flex-1 overflow-y-auto p-2 font-mono text-sm ${theme.terminalBackground}`}>
-          {terminal.history.map((item, index) => (
-            <TerminalHistoryItem 
-              key={index}
-              content={item}
-              isPrompt={item.startsWith('>')}
-              className={item.startsWith('>') ? theme.terminalPromptColor : theme.terminalOutputColor}
-            />
-          ))}
-        </div>
-        
-        {/* Terminal input */}
-        <form 
-          className={`flex items-center p-1 border-t ${theme.tabBorder} ${theme.terminalBackground}`}
-          onSubmit={(e) => handleTerminalSubmit(e, terminal.id)}
-        >
-          <span className={theme.terminalPromptColor}>{'>'}</span>
-          <input
-            ref={terminalInputRef}
-            type="text"
-            value={terminal.input}
-            onChange={(e) => handleTerminalInput(e, terminal.id)}
-            className={`flex-1 bg-transparent border-0 outline-none ml-2 ${theme.terminalForeground} font-mono text-sm`}
-            spellCheck="false"
-            autoComplete="off"
-          />
-        </form>
+      <div className={`flex-1 flex flex-col justify-between overflow-hidden`} style={{ minHeight: '200px' }}>
+        <div 
+          ref={terminalRef} 
+          className={`flex-1 overflow-hidden font-mono ${theme.terminalBackground}`}
+          style={{ height: '100%', width: '100%', minHeight: '200px' }}
+        />
       </div>
     );
   };

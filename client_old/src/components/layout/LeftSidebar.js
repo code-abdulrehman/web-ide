@@ -21,65 +21,8 @@ import {
   FaCircleNotch
 } from 'react-icons/fa';
 import { VscNewFile, VscNewFolder, VscRefresh, VscCollapseAll } from 'react-icons/vsc';
-// Initial file tree data
-const initialTreeData = [
-  {
-    id: "root",
-    name: "project",
-    isFolder: true,
-    isOpen: true,
-    children: [
-      {
-        id: "src",
-        name: "src",
-        isFolder: true,
-        isOpen: true,
-        children: [
-          {
-            id: "components",
-            name: "components",
-            isFolder: true,
-            isOpen: true,
-            children: [
-              {
-                id: "layout",
-                name: "layout",
-                isFolder: true,
-                isOpen: true,
-                children: [
-                  { id: "app-js", name: "App.js", isFolder: false },
-                  { id: "layout-js", name: "Layout.js", isFolder: false },
-                  { id: "topbar-js", name: "Topbar.js", isFolder: false },
-                  { id: "sidebar-js", name: "LeftSidebar.js", isFolder: false },
-                  { id: "editor-js", name: "Editor.js", isFolder: false },
-                  { id: "statusbar-js", name: "Statusbar.js", isFolder: false },
-                ]
-              }
-            ]
-          },
-          { id: "index-js", name: "index.js", isFolder: false },
-          { id: "index-css", name: "index.css", isFolder: false },
-          { id: "app-js-root", name: "App.js", isFolder: false },
-        ]
-      },
-      {
-        id: "public",
-        name: "public",
-        isFolder: true,
-        isOpen: false,
-        children: [
-          { id: "index-html", name: "index.html", isFolder: false },
-          { id: "favicon-ico", name: "favicon.ico", isFolder: false },
-        ]
-      },
-      { id: "package-json", name: "package.json", isFolder: false },
-      { id: "package-lock-json", name: "package-lock.json", isFolder: false },
-      { id: "readme-md", name: "README.md", isFolder: false },
-      { id: ".env", name: ".env", isFolder: false },
-      { id: "tailwind-config", name: "tailwind.config.js", isFolder: false },
-    ]
-  }
-];
+import { useSelector, useDispatch } from 'react-redux'; 
+import { fetchFileTree } from '../../store/slices/fileSystemSlice';
 
 // Custom recursive file tree component
 const FileTreeNode = ({ node, level = 0, theme, onToggle, onFileClick }) => {
@@ -158,14 +101,19 @@ const FileTreeNode = ({ node, level = 0, theme, onToggle, onFileClick }) => {
 
 // Main component
 const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, showIconsOnly = false, showContentOnly = false }) => {
+  const dispatch = useDispatch();
+  const fileSystem = useSelector(state => state.fileSystem);
+  const { fileTree, status: fileTreeStatus, error: fileTreeError } = fileSystem;
+  
   // Local state
-  const [treeData, setTreeData] = useState(initialTreeData);
+  const [treeData, setTreeData] = useState([]); // Start with empty array instead of initialTreeData
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [showSearchOptions, setShowSearchOptions] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [contentWidth, setContentWidth] = useState(240);
   const [isResizing, setIsResizing] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [searchOptions, setSearchOptions] = useState({
     caseSensitive: false,
     wholeWord: false,
@@ -183,15 +131,6 @@ const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, sh
     { id: 'debug', icon: <FaBug />, title: 'Run and Debug' },
     { id: 'settings', icon: <FaCog />, title: 'Settings', position: 'bottom' }
   ];
-
-  // Map panel ID to title
-  const panelTitles = {
-    'explorer': 'Explorer',
-    'search': 'Search',
-    'git': 'Source Control',
-    'debug': 'Run and Debug',
-    'settings': 'Settings'
-  };
 
   // Handle section collapsing for Explorer
   const [sections, setSections] = useState({
@@ -287,6 +226,77 @@ const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, sh
     };
   }, [isResizing]);
 
+  // Fetch file tree on component mount
+  useEffect(() => {
+    console.log("Fetching file tree on mount");
+    dispatch(fetchFileTree());
+  }, [dispatch]);
+  
+  // Update local tree data when file tree is fetched
+  useEffect(() => {
+    console.log("File tree status changed:", fileTreeStatus);
+    console.log("File tree data:", fileTree);
+    
+    if (fileTreeStatus === 'succeeded' && fileTree) {
+      try {
+        // Convert the object-based tree to array format expected by the component
+        const convertTreeToArray = (treeObj) => {
+          if (!treeObj || typeof treeObj !== 'object') {
+            console.error("Invalid tree object:", treeObj);
+            return [];
+          }
+          
+          return Object.keys(treeObj).map(key => {
+            const node = treeObj[key];
+            if (!node) {
+              console.error("Node is undefined for key:", key);
+              return null;
+            }
+            
+            return {
+              id: node.id || key,
+              name: node.name || key,
+              isFolder: node.isFolder || false,
+              isOpen: node.isOpen || false,
+              children: node.children ? convertTreeToArray(node.children) : null
+            };
+          }).filter(Boolean); // Filter out any null entries
+        };
+        
+        const formattedTree = convertTreeToArray(fileTree);
+        console.log("Formatted tree:", formattedTree);
+        
+        if (formattedTree && formattedTree.length > 0) {
+          setTreeData(formattedTree);
+        } else {
+          // If no data from API, use empty array instead of fallback data
+          setTreeData([]);
+          console.warn("Empty formatted tree");
+        }
+      } catch (error) {
+        console.error('Error converting file tree:', error);
+        setTreeData([]);
+      }
+    }
+  }, [fileTree, fileTreeStatus]);
+
+  // Function to refresh file tree
+  const handleRefreshFileTree = () => {
+    console.log("Refreshing file tree");
+    dispatch(fetchFileTree());
+  };
+  
+  // Handle import project button
+  const handleImportProject = () => {
+    console.log("Import project button clicked");
+    // This would normally open a dialog to select a project
+    // For now, just refresh the file tree
+    dispatch(fetchFileTree());
+    
+    // You could also redirect to a project import page or show a modal
+    // For example: setShowImportModal(true);
+  };
+
   // Render different panel contents based on activePanel
   const renderPanelContent = () => {
     switch (activePanel) {
@@ -302,7 +312,11 @@ const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, sh
                 <button className={`p-1 rounded hover:${theme.buttonHoverBackground}`} title="New Folder">
                   <VscNewFolder size={14} />
                 </button>
-                <button className={`p-1 rounded hover:${theme.buttonHoverBackground}`} title="Refresh Explorer">
+                <button 
+                  className={`p-1 rounded hover:${theme.buttonHoverBackground}`} 
+                  title="Refresh Explorer"
+                  onClick={handleRefreshFileTree}
+                >
                   <VscRefresh size={14} />
                 </button>
                 <button className={`p-1 rounded hover:${theme.buttonHoverBackground}`} title="Collapse All">
@@ -342,15 +356,7 @@ const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, sh
               <div className="px-1">                
                 {sections.project && (
                   <div className="px-1 mt-1">
-                    {treeData.map(node => (
-                      <FileTreeNode
-                        key={node.id}
-                        node={node}
-                        theme={theme}
-                        onToggle={toggleNode}
-                        onFileClick={handleFileClick}
-                      />
-                    ))}
+                    {renderFileTreeWithLoading()}
                   </div>
                 )}
               </div>
@@ -617,6 +623,59 @@ const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, sh
           </div>
         );
     }
+  };
+
+  // Add loading state in the explorer panel
+  const renderFileTreeWithLoading = () => {
+    console.log("Render tree status:", fileTreeStatus, "Tree data:", treeData);
+    
+    if (fileTreeStatus === 'loading') {
+      return (
+        <div className={`flex items-center justify-center py-4 ${theme.descriptionForeground}`}>
+          <FaCircleNotch className="animate-spin mr-2" />
+          <span>Loading files...</span>
+        </div>
+      );
+    }
+    
+    if (fileTreeStatus === 'failed') {
+      return (
+        <div className={`flex flex-col items-center justify-center py-4 ${theme.descriptionForeground}`}>
+          <div className="text-red-500 mb-2">Failed to load files: {fileTreeError}</div>
+          <button 
+            className={`px-2 py-1 text-xs ${theme.buttonBackground} rounded`}
+            onClick={handleRefreshFileTree}
+          >
+            Retry
+          </button>
+        </div>
+      );
+    }
+    
+    if (treeData.length === 0) {
+      return (
+        <div className={`flex flex-col items-center justify-center py-12 ${theme.descriptionForeground}`}>
+          <div className="mb-4 text-center">No files found</div>
+          <button 
+            className={`px-3 py-2 text-sm ${theme.buttonBackground} rounded flex items-center`}
+            onClick={handleImportProject}
+          >
+            <VscNewFolder className="mr-2" />
+            Import Project
+          </button>
+        </div>
+      );
+    }
+    
+    return treeData.map(node => (
+      <FileTreeNode
+        key={node.id}
+        node={node}
+        theme={theme}
+        onToggle={toggleNode}
+        onFileClick={handleFileClick}
+      />
+    ));
   };
 
   // If we're only showing icons (the activity bar)

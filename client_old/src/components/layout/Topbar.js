@@ -274,7 +274,7 @@ const Topbar = ({
 
   // Get the current theme name based on theme object
   const getCurrentThemeName = () => {
-    if (!theme) return 'Select';
+    if (!theme) return 'Selectw';
     
     // If the theme has an id property, use it for identification
     if (theme.id) {
