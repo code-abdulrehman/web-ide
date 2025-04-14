@@ -11,8 +11,14 @@ import {
   FaChevronRight
 } from 'react-icons/fa';
 import Editor from '@monaco-editor/react';
+import { useSelector, useDispatch } from 'react-redux';
+import { updateFileContent, closeFile, setCurrentFile } from '../../store/slices/fileSystemSlice';
 
 const EditorComponent = ({ theme, fontSize = 14 }) => {
+  const dispatch = useDispatch();
+  const fileSystem = useSelector(state => state.fileSystem);
+  const { openFiles, currentFile } = fileSystem;
+  
   // State for tabs and active file
   const [tabs, setTabs] = useState([
     { id: 'index.js', label: 'index.js', language: 'javascript', content: getInitialContent('index.js') },
@@ -23,6 +29,50 @@ const EditorComponent = ({ theme, fontSize = 14 }) => {
   
   // Ref for tab container to handle scrolling
   const tabsContainerRef = useRef(null);
+  
+  // Effect to handle file opening from sidebar
+  useEffect(() => {
+    if (currentFile && openFiles[currentFile]) {
+      // Check if the file is already in tabs
+      const existingTab = tabs.find(tab => tab.id === currentFile);
+      
+      if (!existingTab) {
+        // Add a new tab for the opened file
+        const fileName = currentFile.split('/').pop(); // Get just the filename part
+        
+        // Handle the case where the content might be an error object
+        let fileContent = openFiles[currentFile].content;
+        if (typeof fileContent === 'object' && fileContent !== null) {
+          // Convert error object to string representation
+          fileContent = JSON.stringify(fileContent, null, 2);
+        }
+        
+        const newTab = {
+          id: currentFile,
+          label: fileName,
+          language: getLanguageFromFileName(fileName),
+          content: fileContent
+        };
+        
+        setTabs(prevTabs => [...prevTabs, newTab]);
+      }
+      
+      // Set as active tab
+      setActiveTab(currentFile);
+    }
+  }, [currentFile, openFiles]);
+
+  // Helper to determine language from filename
+  const getLanguageFromFileName = (fileName) => {
+    if (fileName.endsWith('.js') || fileName.endsWith('.jsx')) return 'javascript';
+    if (fileName.endsWith('.css')) return 'css';
+    if (fileName.endsWith('.html')) return 'html';
+    if (fileName.endsWith('.json')) return 'json';
+    if (fileName.endsWith('.md')) return 'markdown';
+    if (fileName.endsWith('.ts')) return 'typescript';
+    if (fileName.endsWith('.tsx')) return 'typescript';
+    return 'plaintext';
+  };
   
   // Get file content based on type
   function getInitialContent(filename) {
@@ -127,13 +177,21 @@ code {
   const closeTab = (e, tabId) => {
     e.stopPropagation();
     
-    if (tabs.length > 1) {
-      const newTabs = tabs.filter(tab => tab.id !== tabId);
-      setTabs(newTabs);
-      
-      // If the active tab is being closed, activate another tab
-      if (activeTab === tabId) {
+    // Create new array without the closed tab
+    const newTabs = tabs.filter(tab => tab.id !== tabId);
+    setTabs(newTabs);
+    
+    // If this is a file from the file system, dispatch to Redux to close it
+    if (openFiles[tabId]) {
+      dispatch(closeFile(tabId));
+    }
+    
+    // If the active tab is being closed, activate another tab or show welcome screen
+    if (activeTab === tabId) {
+      if (newTabs.length > 0) {
         setActiveTab(newTabs[0].id);
+      } else {
+        setActiveTab(null);
       }
     }
   };
@@ -158,6 +216,11 @@ code {
         ? { ...tab, content: value } 
         : tab
     ));
+    
+    // Update content in Redux if the file came from the filesystem
+    if (openFiles[activeTab]) {
+      dispatch(updateFileContent({ path: activeTab, content: value }));
+    }
   };
   
   // Get the active tab's language
@@ -165,19 +228,21 @@ code {
     const tab = tabs.find(tab => tab.id === activeTab);
     if (!tab) return 'javascript';
     
-    if (tab.label.endsWith('.js') || tab.label.endsWith('.jsx')) return 'javascript';
-    if (tab.label.endsWith('.css')) return 'css';
-    if (tab.label.endsWith('.html')) return 'html';
-    if (tab.label.endsWith('.json')) return 'json';
-    if (tab.label.endsWith('.md')) return 'markdown';
-    
-    return 'javascript';
+    return getLanguageFromFileName(tab.label);
   };
   
   // Get the active tab's content
   const getContent = () => {
     const tab = tabs.find(tab => tab.id === activeTab);
-    return tab ? tab.content : '';
+    if (!tab) return '';
+    
+    // Ensure content is a string, not an object
+    const content = tab.content;
+    if (typeof content === 'object' && content !== null) {
+      return JSON.stringify(content, null, 2);
+    }
+    
+    return content || '';
   };
   
   // ScrollLeft/ScrollRight for tab overflow
@@ -245,82 +310,146 @@ code {
     return 'vs-dark'; // Default to dark theme
   };
   
-  return (
-    <div className={`flex flex-col h-full flex-1 ${theme.editorBackground}`}>
-      {/* Tabs header */}
-      <div className={`flex items-center ${theme.tabBarBackground} border-b ${theme.tabBorder}`}>
-        {/* Left scroll button */}
-        <button 
-          className={`px-1 py-1 flex items-center justify-center hover:${theme.buttonHoverBackground} transition-colors duration-150`}
-          onClick={() => scrollTabs('left')}
-        >
-          <FaChevronLeft className={`text-xs ${theme.iconColor}`} />
-        </button>
-        
-        {/* Tabs container with horizontal scrolling */}
-        <div 
-          ref={tabsContainerRef}
-          className="flex-1 flex overflow-x-auto no-scrollbar"
-          onWheel={handleWheel}
-          style={{ scrollBehavior: 'smooth' }}
-        >
-          {tabs.map((tab) => (
-            <div
-              key={tab.id}
-              className={`px-3 py-1 h-[30px] text-xs cursor-pointer flex items-center border-r ${theme.tabBorder} whitespace-nowrap transition-colors duration-150 ${
-                activeTab === tab.id 
-                  ? `${theme.tabActiveBackground} border-t-2 ${theme.tabActiveBorder}` 
-                  : `${theme.tabInactiveBackground} hover:${theme.tabHoverBackground}`
-              }`}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              <span className="mr-2">{getFileIcon(tab.label)}</span>
-              <span className={activeTab === tab.id ? theme.foreground : theme.descriptionForeground}>
-                {tab.label}
-              </span>
-              <FaTimes 
-                className={`ml-2 opacity-50 hover:opacity-100 transition-opacity duration-150 ${theme.iconColor}`}
-                onClick={(e) => closeTab(e, tab.id)}
-              />
-            </div>
-          ))}
+  // Render welcome screen when no tabs are open
+  const renderWelcomeScreen = () => {
+    return (
+      <div className={`flex flex-col items-center justify-center h-full ${theme.editorBackground}`}>
+        <div className="text-center max-w-lg animate-fade-in">
+          <div className="text-6xl mb-6 opacity-20">👋</div>
+          <h1 className={`text-2xl font-light mb-4 ${theme.foreground}`}>Welcome to Web IDE</h1>
+          <p className={`text-sm mb-6 ${theme.descriptionForeground} max-w-md text-center`}>
+            A powerful, lightweight IDE for web development right in your browser.
+          </p>
           
-          {/* Add tab button */}
-          <div 
-            className={`px-3 py-1 text-xs cursor-pointer flex items-center hover:${theme.tabHoverBackground} transition-colors duration-150`}
-            onClick={addTab}
-          >
-            <span className={`text-xs ${theme.iconColor}`}>+</span>
+          <div className="flex space-x-4 justify-center mb-10">
+            <button 
+              className={`px-4 py-2 rounded-sm text-sm ${theme.buttonBackground} ${theme.buttonForeground} hover:${theme.buttonHoverBackground}`}
+              onClick={addTab}
+            >
+              New File
+            </button>
+            <button 
+              className={`px-4 py-2 rounded-sm text-sm ${theme.secondaryButtonBackground} ${theme.secondaryButtonForeground} hover:${theme.secondaryButtonHoverBackground}`}
+              onClick={() => {/* Could open a project */}}
+            >
+              Open Folder
+            </button>
+            <button 
+              className={`px-4 py-2 rounded-sm text-sm ${theme.secondaryButtonBackground} ${theme.secondaryButtonForeground} hover:${theme.secondaryButtonHoverBackground}`}
+              onClick={() => {/* Could clone a repository */}}
+            >
+              Clone Repository
+            </button>
+          </div>
+          
+          <div className="flex gap-8 text-left mt-8">
+            <div className="flex-1">
+              <h3 className={`text-sm font-medium mb-2 ${theme.foreground}`}>Get Started</h3>
+              <p className={`text-xs ${theme.descriptionForeground}`}>
+                Create a new file, open a folder or clone a git repository to begin.
+              </p>
+              <p className={`text-xs mt-2 ${theme.descriptionForeground}`}>
+                Use <span className={`bg-opacity-20 bg-black px-1 py-0.5 rounded font-mono ${theme.foreground}`}>Ctrl+N</span> to create a new file.
+              </p>
+            </div>
+            <div className="flex-1">
+              <h3 className={`text-sm font-medium mb-2 ${theme.foreground}`}>Recent Projects</h3>
+              <p className={`text-xs ${theme.descriptionForeground}`}>
+                Quick access to your recent projects will appear here.
+              </p>
+              <p className={`text-xs mt-2 ${theme.descriptionForeground}`}>
+                Use <span className={`bg-opacity-20 bg-black px-1 py-0.5 rounded font-mono ${theme.foreground}`}>Ctrl+R</span> to open the recent projects list.
+              </p>
+            </div>
           </div>
         </div>
-        
-        {/* Right scroll button */}
-        <button 
-          className={`px-1 py-1 flex items-center justify-center hover:${theme.buttonHoverBackground} transition-colors duration-150`}
-          onClick={() => scrollTabs('right')}
-        >
-          <FaChevronRight className={`text-xs ${theme.iconColor}`} />
-        </button>
       </div>
-      
-      {/* Editor area */}
-      <div className="flex-1 overflow-hidden">
-        <Editor
-          height="100%"
-          language={getLanguage()}
-          value={getContent()}
-          onChange={handleEditorChange}
-          theme={getEditorTheme()}
-          options={getEditorOptions()}
-          loading={
-            <div className={`flex items-center justify-center h-full ${theme.editorBackground}`}>
-              <div className={`text-sm ${theme.foreground} animate-pulse`}>Loading editor...</div>
+    );
+  };
+  
+  return (
+    <div className={`flex flex-col h-full flex-1 ${theme.editorBackground}`}>
+      {/* Tabs header - only show if there are tabs */}
+      {tabs.length > 0 && (
+        <div className={`flex items-center ${theme.tabBarBackground} border-b ${theme.tabBorder}`}>
+          {/* Left scroll button */}
+          <button 
+            className={`px-1 py-1 flex items-center justify-center hover:${theme.buttonHoverBackground} transition-colors duration-150`}
+            onClick={() => scrollTabs('left')}
+          >
+            <FaChevronLeft className={`text-xs ${theme.iconColor}`} />
+          </button>
+          
+          {/* Tabs container with horizontal scrolling */}
+          <div 
+            ref={tabsContainerRef}
+            className="flex-1 flex overflow-x-auto no-scrollbar"
+            onWheel={handleWheel}
+            style={{ scrollBehavior: 'smooth' }}
+          >
+            {tabs.map((tab) => (
+              <div
+                key={tab.id}
+                className={`px-3 py-1 h-[30px] text-xs cursor-pointer flex items-center border-r ${theme.tabBorder} whitespace-nowrap transition-colors duration-150 ${
+                  activeTab === tab.id 
+                    ? `${theme.tabActiveBackground} border-t-2 ${theme.tabActiveBorder}` 
+                    : `${theme.tabInactiveBackground} hover:${theme.tabHoverBackground}`
+                }`}
+                onClick={() => setActiveTab(tab.id)}
+              >
+                <span className="mr-2">{getFileIcon(tab.label)}</span>
+                <span className={activeTab === tab.id ? theme.foreground : theme.descriptionForeground}>
+                  {tab.label}
+                  {openFiles[tab.id]?.isDirty && <span className="ml-1">•</span>}
+                </span>
+                <FaTimes 
+                  className={`ml-2 opacity-50 hover:opacity-100 transition-opacity duration-150 ${theme.iconColor}`}
+                  onClick={(e) => closeTab(e, tab.id)}
+                />
+              </div>
+            ))}
+            
+            {/* Add tab button */}
+            <div 
+              className={`px-3 py-1 text-xs cursor-pointer flex items-center hover:${theme.tabHoverBackground} transition-colors duration-150`}
+              onClick={addTab}
+            >
+              <span className={`text-xs ${theme.iconColor}`}>+</span>
             </div>
-          }
-          beforeMount={(monaco) => {
-            // You can customize Monaco before it mounts here
-          }}
-        />
+          </div>
+          
+          {/* Right scroll button */}
+          <button 
+            className={`px-1 py-1 flex items-center justify-center hover:${theme.buttonHoverBackground} transition-colors duration-150`}
+            onClick={() => scrollTabs('right')}
+          >
+            <FaChevronRight className={`text-xs ${theme.iconColor}`} />
+          </button>
+        </div>
+      )}
+      
+      {/* Editor area or welcome screen */}
+      <div className="flex-1 overflow-hidden">
+        {tabs.length > 0 ? (
+          <Editor
+            height="100%"
+            language={getLanguage()}
+            value={getContent()}
+            onChange={handleEditorChange}
+            theme={getEditorTheme()}
+            options={getEditorOptions()}
+            loading={
+              <div className={`flex items-center justify-center h-full ${theme.editorBackground}`}>
+                <div className={`text-sm ${theme.foreground} animate-pulse`}>Loading editor...</div>
+              </div>
+            }
+            beforeMount={(monaco) => {
+              // You can customize Monaco before it mounts here
+            }}
+          />
+        ) : (
+          renderWelcomeScreen()
+        )}
       </div>
     </div>
   );

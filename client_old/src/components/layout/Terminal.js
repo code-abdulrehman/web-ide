@@ -12,12 +12,6 @@ import {
 import { Terminal as XTerminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 
-// Memoized terminal history item to reduce re-renders
-const TerminalHistoryItem = memo(({ content, isPrompt, className }) => (
-  <div className={className}>
-    {content}
-  </div>
-));
 
 // Simple Terminal component
 const Terminal = ({ 
@@ -212,7 +206,7 @@ const Terminal = ({
   // Render the terminal content
   const renderTerminalContent = () => {
     return (
-      <div className={`flex-1 flex flex-col justify-between overflow-hidden`} style={{ minHeight: '200px' }}>
+      <div className={`flex-1 flex flex-col justify-between overflow-hidden`} style={{ minHeight: '220px' }}>
         <div 
           ref={terminalRef} 
           className={`flex-1 overflow-hidden font-mono ${theme.terminalBackground}`}

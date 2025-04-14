@@ -14,7 +14,7 @@ import 'xterm/css/xterm.css';
 const container = document.getElementById('root');
 const root = ReactDOM.createRoot(container);
 
-// Render app to root
+// Render app to root with Redux provider
 root.render(
   <React.StrictMode>
     <Provider store={store}>

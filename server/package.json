@@ -25,6 +25,7 @@
     "firebase-admin": "^13.2.0",
     "http": "0.0.1-security",
     "jsonwebtoken": "^9.0.2",
+    "jstree": "^3.3.17",
     "mongodb": "^6.15.0",
     "mongoose": "^8.13.2",
     "node-pty": "1.1.0-beta34",

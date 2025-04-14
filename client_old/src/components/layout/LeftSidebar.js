@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   FaFolder, 
   FaFolderOpen,
@@ -18,112 +18,32 @@ import {
   FaCog,
   FaEllipsisH,
   FaTimes,
-  FaCircleNotch
+  FaCircleNotch,
+  FaPlus
 } from 'react-icons/fa';
 import { VscNewFile, VscNewFolder, VscRefresh, VscCollapseAll } from 'react-icons/vsc';
-import { useSelector, useDispatch } from 'react-redux'; 
-import { fetchFileTree } from '../../store/slices/fileSystemSlice';
-
-// Custom recursive file tree component
-const FileTreeNode = ({ node, level = 0, theme, onToggle, onFileClick }) => {
-  const isFolder = node.isFolder;
-  const isOpen = node.isOpen;
-  
-  // Get the appropriate icon for the file type
-  const getFileIcon = (fileName) => {
-    if (fileName.endsWith('.js') || fileName.endsWith('.jsx')) return <FaJs className={theme.iconActiveColor} />;
-    if (fileName.endsWith('.html')) return <FaHtml5 className="text-orange-500" />;
-    if (fileName.endsWith('.css')) return <FaCss3 className="text-blue-500" />;
-    if (fileName.endsWith('.md')) return <FaMarkdown className={theme.descriptionForeground} />;
-    if (fileName.endsWith('.json')) return <FaFileAlt className="text-yellow-300" />;
-    if (fileName.endsWith('.tsx') || fileName.endsWith('.ts')) return <FaCode className="text-blue-400" />;
-    if (fileName.endsWith('.jsx') || fileName.endsWith('.tsx')) return <FaReact className="text-blue-400" />;
-    return <FaFile className={theme.iconColor} />;
-  };
-
-  // Get folder icon
-  const getFolderIcon = (isOpen) => {
-    return isOpen ? <FaFolderOpen className="text-yellow-300" /> : <FaFolder className="text-yellow-300" />;
-  };
-
-  const handleToggle = (e) => {
-    e.stopPropagation();
-    if (isFolder && onToggle) {
-      onToggle(node.id);
-    }
-  };
-
-  const handleClick = () => {
-    if (isFolder) {
-      onToggle(node.id);
-    } else if (onFileClick) {
-      onFileClick(node);
-    }
-  };
-
-  return (
-    <div>
-      <div
-        className={`flex items-center py-1 hover:${theme.listHoverBackground} cursor-pointer rounded-sm group`}
-        onClick={handleClick}
-        style={{ paddingLeft: `${level * 12}px` }}
-      >
-        <div className="flex items-center w-full">
-          {isFolder && (
-            <span className={`mr-1 ${theme.iconColor}`} onClick={handleToggle}>
-              {isOpen ? <FaChevronDown size={10} /> : <FaChevronRight size={10} />}
-          </span>
-        )}
-          <span className={`mr-2 ${theme.accentColor}`}>
-            {isFolder ? getFolderIcon(isOpen) : getFileIcon(node.name)}
-        </span>
-          <span className={`text-sm truncate ${theme.foreground}`}>{node.name}</span>
-        </div>
-      </div>
-      
-      {isFolder && isOpen && node.children && (
-        <div>
-          {node.children.map(childNode => (
-            <FileTreeNode
-              key={childNode.id}
-              node={childNode}
-              level={level + 1}
-              theme={theme}
-              onToggle={onToggle}
-              onFileClick={onFileClick}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
+import { useSelector, useDispatch } from 'react-redux';
+import { fetchFileTree, readFile, setCurrentFile, closeFile } from '../../store/slices/fileSystemSlice';
+import JsTreeFileExplorer from './JsTreeFileExplorer';
 
 // Main component
 const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, showIconsOnly = false, showContentOnly = false }) => {
   const dispatch = useDispatch();
   const fileSystem = useSelector(state => state.fileSystem);
-  const { fileTree, status: fileTreeStatus, error: fileTreeError } = fileSystem;
-  
+  const { fileTree, status: fileTreeStatus, error: fileTreeError, currentFile, openFiles } = fileSystem;
+
   // Local state
-  const [treeData, setTreeData] = useState([]); // Start with empty array instead of initialTreeData
+  const [treeData, setTreeData] = useState([]); 
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [showSearchOptions, setShowSearchOptions] = useState(false);
-  const [isSearching, setIsSearching] = useState(false);
   const [contentWidth, setContentWidth] = useState(240);
   const [isResizing, setIsResizing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [searchOptions, setSearchOptions] = useState({
-    caseSensitive: false,
-    wholeWord: false,
-    useRegex: false,
-    includeIgnored: false,
-    includePattern: '',
-    excludePattern: ''
-  });
+  const [mainFolderName, setMainFolderName] = useState('Files');
+  const [showNoDataOptions, setShowNoDataOptions] = useState(false);
+  const [apiCallFailed, setApiCallFailed] = useState(false);
+  const [firstLoad, setFirstLoad] = useState(true);
   
-  // Define activity bar items - centralized configuration
+  // Define activity bar items
   const activityBarItems = [
     { id: 'explorer', icon: <FaFolder />, title: 'Explorer' },
     { id: 'search', icon: <FaSearch />, title: 'Search' },
@@ -132,58 +52,130 @@ const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, sh
     { id: 'settings', icon: <FaCog />, title: 'Settings', position: 'bottom' }
   ];
 
-  // Handle section collapsing for Explorer
-  const [sections, setSections] = useState({
-    openEditors: true,
-    project: true,
-    outline: false
-  });
-
-  const toggleSection = (section) => {
-    setSections(prev => ({
-      ...prev,
-      [section]: !prev[section]
-    }));
-  };
-
-  // Toggle folder open/closed state in the tree
-  const toggleNode = (nodeId) => {
-    const toggleNodeRecursive = (nodes) => {
-      return nodes.map(node => {
-        if (node.id === nodeId) {
-          return { ...node, isOpen: !node.isOpen };
-        }
-        if (node.children) {
-          return { ...node, children: toggleNodeRecursive(node.children) };
-        }
-        return node;
-      });
-    };
+  // Convert the object-based tree to array format - memoize for performance
+  const convertTreeToArray = useCallback((treeObj) => {
+    if (!treeObj || typeof treeObj !== 'object') {
+      return [];
+    }
     
-    setTreeData(toggleNodeRecursive(treeData));
-  };
+    const result = Object.keys(treeObj).map(key => {
+      const node = treeObj[key];
+      if (!node) {
+        return null;
+      }
+      
+      // Create a node with all properties properly copied
+      const newNode = {
+        id: node.id || key,
+        name: node.name || key,
+        path: node.path || key,
+        isFolder: node.isFolder || false,
+        isOpen: true, // Always open, no collapsable folders
+        children: node.children ? convertTreeToArray(node.children) : null
+      };
+      
+      return newNode;
+    }).filter(Boolean); // Filter out any null entries
+    
+    return result;
+  }, []);
 
-  // Handle file click
+  // Fetch data from API
+  const fetchFileData = useCallback(async () => {
+    setIsLoading(true);
+    
+    try {
+      // Dispatch the actual Redux action to fetch file tree
+      const result = await dispatch(fetchFileTree()).unwrap();
+      
+      // If result is empty or undefined, show the no data options
+      if (!result || Object.keys(result).length === 0) {
+        setShowNoDataOptions(true);
+        setApiCallFailed(false);
+        setTreeData([]);
+      } else {
+        // Process the API data
+        const formattedTree = convertTreeToArray(result);
+        setTreeData(formattedTree);
+        setShowNoDataOptions(false);
+        setApiCallFailed(false);
+        
+        // Set main folder name
+        if (formattedTree.length > 0 && formattedTree[0]?.path) {
+          const pathParts = formattedTree[0].path.split('/');
+          if (pathParts.length > 0) {
+            setMainFolderName(pathParts[0]);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching file data:", error);
+      setApiCallFailed(true);
+      setShowNoDataOptions(true);
+    } finally {
+      setIsLoading(false);
+      setFirstLoad(false);
+    }
+  }, [convertTreeToArray, dispatch]);
+
+  // Load data on component mount
+  useEffect(() => {
+    fetchFileData();
+  }, [fetchFileData]);
+
+  // Also update when fileTree changes in Redux
+  useEffect(() => {
+    if (fileTreeStatus === 'succeeded' && fileTree) {
+      const formattedTree = convertTreeToArray(fileTree);
+      
+      if (formattedTree.length === 0) {
+        setShowNoDataOptions(true);
+      } else {
+        setTreeData(formattedTree);
+        setShowNoDataOptions(false);
+        
+        // Set main folder name
+        if (formattedTree.length > 0 && formattedTree[0]?.path) {
+          const pathParts = formattedTree[0].path.split('/');
+          if (pathParts.length > 0) {
+            setMainFolderName(pathParts[0]);
+          }
+        }
+      }
+    } else if (fileTreeStatus === 'failed') {
+      setApiCallFailed(true);
+      setShowNoDataOptions(true);
+    }
+  }, [fileTree, fileTreeStatus, convertTreeToArray]);
+
+  // Function to handle file click
   const handleFileClick = (node) => {
-    console.log('Opening file:', node.name);
-    // Here you would implement file opening logic
+    // Use the path property from the node
+    const filePath = node.path;
+    
+    // If file is not already open, read its content
+    if (!openFiles[filePath]) {
+      dispatch(readFile(filePath));
+    } else {
+      // If already loaded, just set as current file
+      dispatch(setCurrentFile(filePath));
+    }
   };
 
-  // Simulate search functionality
-  const handleSearch = () => {
-    if (!searchTerm.trim()) return;
-    
-    setIsSearching(true);
-    // Simulate delay for search operation
-    setTimeout(() => {
-      const results = [
-        { file: 'src/components/layout/Layout.js', line: 45, preview: 'const Layout = ({ theme, toggleTheme }) => {' },
-        { file: 'src/App.js', line: 12, preview: 'import { ThemeProvider } from "./contexts/ThemeContext";' },
-        { file: 'src/components/layout/Editor.js', line: 23, preview: 'const EditorComponent = ({ theme }) => {' }
-      ];
-      setSearchResults(results);
-      setIsResizing(false);
-    }, 800);
+  // Function to refresh file tree
+  const handleRefreshFileTree = () => {
+    fetchFileData();
+  };
+
+  // Get the appropriate icon for file type
+  const getFileIcon = (fileName) => {
+    if (fileName.endsWith('.js') || fileName.endsWith('.jsx')) return <FaJs className="text-yellow-400 mr-2" size={12} />;
+    if (fileName.endsWith('.html')) return <FaHtml5 className="text-orange-500 mr-2" size={12} />;
+    if (fileName.endsWith('.css')) return <FaCss3 className="text-blue-500 mr-2" size={12} />;
+    if (fileName.endsWith('.md')) return <FaMarkdown className={theme.descriptionForeground} mr-2 size={12} />;
+    if (fileName.endsWith('.json')) return <FaFileAlt className="text-yellow-300 mr-2" size={12} />;
+    if (fileName.endsWith('.tsx') || fileName.endsWith('.ts')) return <FaCode className="text-blue-400 mr-2" size={12} />;
+    return <FaFile className={theme.iconColor} mr-2 size={12} />;
   };
 
   // Handle click on activity bar item
@@ -226,143 +218,266 @@ const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, sh
     };
   }, [isResizing]);
 
-  // Fetch file tree on component mount
-  useEffect(() => {
-    console.log("Fetching file tree on mount");
-    dispatch(fetchFileTree());
-  }, [dispatch]);
-  
-  // Update local tree data when file tree is fetched
-  useEffect(() => {
-    console.log("File tree status changed:", fileTreeStatus);
-    console.log("File tree data:", fileTree);
-    
-    if (fileTreeStatus === 'succeeded' && fileTree) {
-      try {
-        // Convert the object-based tree to array format expected by the component
-        const convertTreeToArray = (treeObj) => {
-          if (!treeObj || typeof treeObj !== 'object') {
-            console.error("Invalid tree object:", treeObj);
-            return [];
-          }
-          
-          return Object.keys(treeObj).map(key => {
-            const node = treeObj[key];
-            if (!node) {
-              console.error("Node is undefined for key:", key);
-              return null;
-            }
-            
-            return {
-              id: node.id || key,
-              name: node.name || key,
-              isFolder: node.isFolder || false,
-              isOpen: node.isOpen || false,
-              children: node.children ? convertTreeToArray(node.children) : null
-            };
-          }).filter(Boolean); // Filter out any null entries
-        };
-        
-        const formattedTree = convertTreeToArray(fileTree);
-        console.log("Formatted tree:", formattedTree);
-        
-        if (formattedTree && formattedTree.length > 0) {
-          setTreeData(formattedTree);
-        } else {
-          // If no data from API, use empty array instead of fallback data
-          setTreeData([]);
-          console.warn("Empty formatted tree");
-        }
-      } catch (error) {
-        console.error('Error converting file tree:', error);
-        setTreeData([]);
-      }
-    }
-  }, [fileTree, fileTreeStatus]);
+  // Render open editors 
+  const renderOpenEditors = () => {
+    const openFilesList = Object.keys(openFiles).map(path => ({
+      path,
+      name: path.split('/').pop(), // Extract filename from path
+      isActive: path === currentFile
+    }));
 
-  // Function to refresh file tree
-  const handleRefreshFileTree = () => {
-    console.log("Refreshing file tree");
-    dispatch(fetchFileTree());
+    if (openFilesList.length === 0) {
+      return (
+        <div className={`px-2 py-1 text-sm ${theme.descriptionForeground}`}>
+          No open files
+        </div>
+      );
+    }
+
+    return openFilesList.map((file, index) => (
+      <div 
+        key={index}
+        className={`px-2 py-1 text-sm rounded flex items-center justify-between hover:${theme.listHoverBackground} ${file.isActive ? theme.listActiveBackground : ''}`}
+        onClick={() => dispatch(setCurrentFile(file.path))}
+      >
+        <div className="flex items-center truncate">
+          {getFileIcon(file.name)}
+          <span className="ml-2 truncate">{file.name}</span>
+          {openFiles[file.path]?.isDirty && (
+            <span className="ml-1 text-xs">•</span>
+          )}
+        </div>
+        <div 
+          className="opacity-0 group-hover:opacity-100 hover:text-gray-300"
+          onClick={(e) => {
+            e.stopPropagation();
+            dispatch(closeFile(file.path));
+          }}
+        >
+          <FaTimes size={10} />
+        </div>
+      </div>
+    ));
   };
   
   // Handle import project button
   const handleImportProject = () => {
     console.log("Import project button clicked");
-    // This would normally open a dialog to select a project
-    // For now, just refresh the file tree
-    dispatch(fetchFileTree());
-    
-    // You could also redirect to a project import page or show a modal
-    // For example: setShowImportModal(true);
+    // Create an example project structure to show
+    const exampleProject = {
+      "project": {
+        "id": "project",
+        "name": "project",
+        "path": "project",
+        "isFolder": true,
+        "isOpen": true,
+        "children": {
+          "src": {
+            "id": "src",
+            "name": "src",
+            "path": "project/src",
+            "isFolder": true,
+            "isOpen": true,
+            "children": {
+              "index.js": {
+                "id": "index.js",
+                "name": "index.js",
+                "path": "project/src/index.js",
+                "isFolder": false,
+                "isOpen": false,
+                "children": null
+              },
+              "App.js": {
+                "id": "App.js",
+                "name": "App.js",
+                "path": "project/src/App.js",
+                "isFolder": false,
+                "isOpen": false,
+                "children": null
+              }
+            }
+          },
+          "package.json": {
+            "id": "package.json",
+            "name": "package.json",
+            "path": "project/package.json",
+            "isFolder": false,
+            "isOpen": false,
+            "children": null
+          }
+        }
+      }
+    };
+
+    // Here, you would normally send this to your API
+    // For demo, we'll just update the local state
+    setTreeData(convertTreeToArray(exampleProject));
+    setMainFolderName("Project");
+    setShowNoDataOptions(false);
   };
 
-  // Render different panel contents based on activePanel
-  const renderPanelContent = () => {
-    switch (activePanel) {
-      case 'explorer':
+  // Handle create new project button
+  const handleCreateProject = () => {
+    console.log("Create new project button clicked");
+    // Create a simple new project structure
+    const newProject = {
+      "new-project": {
+        "id": "new-project",
+        "name": "new-project",
+        "path": "new-project",
+        "isFolder": true,
+        "isOpen": true,
+        "children": {
+          "index.js": {
+            "id": "index.js",
+            "name": "index.js",
+            "path": "new-project/index.js",
+            "isFolder": false,
+            "isOpen": false,
+            "children": null
+          },
+          "README.md": {
+            "id": "README.md",
+            "name": "README.md",
+            "path": "new-project/README.md",
+            "isFolder": false,
+            "isOpen": false,
+            "children": null
+          }
+        }
+      }
+    };
+
+    // Here, you would normally send this to your API
+    // For demo, we'll just update the local state
+    setTreeData(convertTreeToArray(newProject));
+    setMainFolderName("New Project");
+    setShowNoDataOptions(false);
+  };
+
+  // Render the no data or error view
+  const renderNoDataView = () => {
+    return (
+      <div className={`flex flex-col items-center justify-center py-12 ${theme.descriptionForeground}`}>
+        {apiCallFailed ? (
+          <>
+            <div className="text-red-500 mb-4 text-center">Failed to load files</div>
+            <button 
+              className={`px-3 py-2 text-sm ${theme.buttonBackground} rounded flex items-center`}
+              onClick={handleRefreshFileTree}
+            >
+              <VscRefresh className="mr-2" />
+              Retry
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="mb-4 text-center">No files found</div>
+            <div className="flex flex-col space-y-2">
+              <button 
+                className={`px-3 py-2 text-sm ${theme.buttonBackground} rounded flex items-center`}
+                onClick={handleImportProject}
+              >
+                <VscNewFolder className="mr-2" />
+                Import Project
+              </button>
+              <button 
+                className={`px-3 py-2 text-sm ${theme.buttonBackground} rounded flex items-center`}
+                onClick={handleCreateProject}
+              >
+                <FaPlus className="mr-2" />
+                Create New Project
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
+  // Explorer panel
+  const renderExplorerPanel = () => {
         return (
           <div className="h-full flex flex-col">
             <div className={`px-4 py-1 font-medium h-[31px] uppercase text-xs flex justify-between items-center border-b ${theme.tabBorder} ${theme.panelTitleForeground}`}>
-              <span>Explorer</span>
+          <span>{mainFolderName}</span>
               <div className="flex space-x-1">
-                <button className={`p-1 rounded hover:${theme.buttonHoverBackground}`} title="New File">
+            <button 
+              className={`p-1 rounded hover:${theme.buttonHoverBackground}`} 
+              title="New File"
+              onClick={() => {/* Handle new file */}}
+            >
                   <VscNewFile size={14} />
                 </button>
-                <button className={`p-1 rounded hover:${theme.buttonHoverBackground}`} title="New Folder">
+            <button 
+              className={`p-1 rounded hover:${theme.buttonHoverBackground}`} 
+              title="New Folder"
+              onClick={() => {/* Handle new folder */}}
+            >
                   <VscNewFolder size={14} />
                 </button>
                 <button 
-                  className={`p-1 rounded hover:${theme.buttonHoverBackground}`} 
+              className={`p-1 rounded hover:${theme.buttonHoverBackground} relative`} 
                   title="Refresh Explorer"
                   onClick={handleRefreshFileTree}
+              disabled={isLoading}
                 >
+              {isLoading ? (
+                <FaCircleNotch size={14} className="animate-spin" />
+              ) : (
                   <VscRefresh size={14} />
-                </button>
-                <button className={`p-1 rounded hover:${theme.buttonHoverBackground}`} title="Collapse All">
-                  <VscCollapseAll size={14} />
+              )}
                 </button>
               </div>
             </div>
             
             <div className="flex-1 overflow-y-auto no-scrollbar">
-              {/* Open Editors Section */}
+          {/* Open Files Section */}
               <div className="mb-2">
-                <div 
-                  className={`flex items-center px-2 py-1 cursor-pointer hover:${theme.listHoverBackground}`}
-                  onClick={() => toggleSection('openEditors')}
-                >
-                  <span className="mr-1 text-gray-500">
-                    {sections.openEditors ? <FaChevronDown size={10} /> : <FaChevronRight size={10} />}
-                  </span>
-                  <span className="text-xs uppercase font-medium">Open Editors</span>
+            <div className={`flex items-center px-4 py-2 ${theme.panelTitleForeground}`}>
+              <span className="text-xs uppercase font-medium">Open Files</span>
                 </div>
                 
-                {sections.openEditors && (
-                  <div className="pl-4 mt-1">
-                    <div className={`px-2 py-1 text-sm rounded flex items-center hover:${theme.listHoverBackground}`}>
-                      <FaJs className="text-yellow-400 mr-2" size={12} />
-                      <span className="truncate">App.js</span>
-                    </div>
-                    <div className={`px-2 py-1 text-sm rounded flex items-center hover:${theme.listHoverBackground} ${theme.listActiveBackground}`}>
-                      <FaJs className="text-yellow-400 mr-2" size={12} />
-                      <span className="truncate">Layout.js</span>
+            <div className="pl-2">
+              {renderOpenEditors()}
                     </div>
                   </div>
-                )}
+          
+          {/* File Explorer */}
+          <div className="px-2 mt-4">
+            {isLoading && firstLoad ? (
+              <div className={`flex items-center justify-center py-4 ${theme.descriptionForeground}`}>
+                <FaCircleNotch className="animate-spin mr-2" />
+                <span>Loading files...</span>
               </div>
-              
-              {/* Project Section */}
-              <div className="px-1">                
-                {sections.project && (
-                  <div className="px-1 mt-1">
-                    {renderFileTreeWithLoading()}
+            ) : showNoDataOptions || treeData.length === 0 ? (
+              renderNoDataView()
+            ) : (
+              <JsTreeFileExplorer 
+                fileData={treeData}
+                onFileSelect={handleFileClick}
+                theme={theme}
+                currentFile={currentFile}
+              />
+            )}
+            
+            {/* Loading indicator for background refresh */}
+            {isLoading && !firstLoad && (
+              <div className="absolute bottom-2 right-2 p-1">
+                <FaCircleNotch className="animate-spin text-xs opacity-50" />
                   </div>
                 )}
               </div>
             </div>
           </div>
         );
+  };
+  
+  // Panel content renderer
+  const renderPanelContent = () => {
+    switch (activePanel) {
+      case 'explorer':
+        return renderExplorerPanel();
         
       case 'search':
         return (
@@ -375,152 +490,12 @@ const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, sh
                   placeholder="Search in workspace" 
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                   className={`w-full px-3 py-2 text-sm rounded-sm ${theme.inputBackground} pr-8 focus:outline-none focus:ring-1 focus:ring-blue-500`} 
                 />
-                <button 
-                  className="absolute right-0 top-0 h-full px-2 flex items-center"
-                  onClick={() => setShowSearchOptions(!showSearchOptions)}
-                >
+                <button className="absolute right-0 top-0 h-full px-2 flex items-center">
                   <FaEllipsisH size={12} className={theme.descriptionForeground} />
                 </button>
               </div>
-              
-              {showSearchOptions && (
-                <div className={`mt-2 p-2 rounded-sm text-xs ${theme.inputBackground} border ${theme.menuBorder}`}>
-                  <div className="mb-3">
-                    <h4 className={`mb-2 font-medium ${theme.foreground}`}>Filters</h4>
-                    <div className="flex flex-wrap gap-2">
-                      <div className="flex-1 min-w-[140px]">
-                        <div className="mb-1 flex items-center">
-                          <input 
-                            type="checkbox" 
-                            id="case-sensitive" 
-                            className={`mr-2 ${theme.accentColor}`}  
-                            checked={searchOptions.caseSensitive || false}
-                            onChange={(e) => setSearchOptions(prev => ({...prev, caseSensitive: e.target.checked}))}
-                          />
-                          <label htmlFor="case-sensitive" className={theme.foreground}>Case Sensitive</label>
-                        </div>
-                        <div className="mb-1 flex items-center">
-                          <input 
-                            type="checkbox" 
-                            id="whole-word" 
-                            className={`mr-2 ${theme.accentColor}`} 
-                            checked={searchOptions.wholeWord || false}
-                            onChange={(e) => setSearchOptions(prev => ({...prev, wholeWord: e.target.checked}))}
-                          />
-                          <label htmlFor="whole-word" className={theme.foreground}>Whole Word</label>
-                        </div>
-                      </div>
-                      <div className="flex-1 min-w-[140px]">
-                  <div className="mb-1 flex items-center">
-                          <input 
-                            type="checkbox" 
-                            id="regex" 
-                            className={`mr-2 ${theme.accentColor}`}  
-                            checked={searchOptions.useRegex || false}
-                            onChange={(e) => setSearchOptions(prev => ({...prev, useRegex: e.target.checked}))}
-                          />
-                          <label htmlFor="regex" className={theme.foreground}>Regular Expression</label>
-                        </div>
-                        <div className="flex items-center">
-                          <input 
-                            type="checkbox" 
-                            id="include-ignore" 
-                            className={`mr-2 ${theme.accentColor}`}  
-                            checked={searchOptions.includeIgnored || false}
-                            onChange={(e) => setSearchOptions(prev => ({...prev, includeIgnored: e.target.checked}))}
-                          />
-                          <label htmlFor="include-ignore" className={theme.foreground}>Include Ignored Files</label>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="mb-2">
-                    <h4 className={`mb-2 font-medium ${theme.foreground}`}>Files to Include</h4>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. *.js, src/**/*.ts" 
-                      className={`w-full px-2 py-1 text-xs rounded-sm ${theme.inputBackground} border ${theme.menuBorder} focus:outline-none focus:ring-1 focus:ring-blue-500`}
-                      value={searchOptions.includePattern || ''}
-                      onChange={(e) => setSearchOptions(prev => ({...prev, includePattern: e.target.value}))}
-                    />
-                  </div>
-                  
-                  <div className="mb-2">
-                    <h4 className={`mb-2 font-medium ${theme.foreground}`}>Files to Exclude</h4>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. node_modules, *.test.js" 
-                      className={`w-full px-2 py-1 text-xs rounded-sm ${theme.inputBackground} border ${theme.menuBorder} focus:outline-none focus:ring-1 focus:ring-blue-500`}
-                      value={searchOptions.excludePattern || ''}
-                      onChange={(e) => setSearchOptions(prev => ({...prev, excludePattern: e.target.value}))}
-                    />
-                  </div>
-                  
-                  <div className="flex justify-between mt-3">
-                    <button 
-                      className={`px-2 py-1 text-xs ${theme.buttonBackground} ${theme.buttonForeground} rounded`}
-                      onClick={handleSearch}
-                    >
-                      Search
-                    </button>
-                    <button 
-                      className={`px-2 py-1 text-xs ${theme.secondaryButtonBackground} ${theme.secondaryButtonForeground} rounded`}
-                      onClick={() => setSearchOptions({
-                        caseSensitive: false,
-                        wholeWord: false,
-                        useRegex: false,
-                        includeIgnored: false,
-                        includePattern: '',
-                        excludePattern: ''
-                      })}
-                    >
-                      Reset Filters
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            <div className="flex-1 overflow-y-auto no-scrollbar px-4">
-              {isSearching ? (
-                <div className={`text-sm my-2 ${theme.descriptionForeground} flex items-center`}>
-                  <div className="animate-spin mr-2">
-                    <FaCircleNotch size={14} />
-                  </div>
-                  Searching...
-                </div>
-              ) : searchTerm && searchResults.length === 0 ? (
-                <div className={`text-sm my-2 ${theme.descriptionForeground}`}>
-                  No results found
-                </div>
-              ) : (
-                <div>
-                  {searchResults.length > 0 && (
-                    <div className={`text-xs mb-3 ${theme.descriptionForeground}`}>
-                      {searchResults.length} {searchResults.length === 1 ? 'result' : 'results'} found
-                    </div>
-                  )}
-                  
-                  {searchResults.map((result, index) => (
-                    <div key={index} className={`my-2 rounded-sm p-1 hover:${theme.listHoverBackground} cursor-pointer`}>
-                      <div className={`text-sm flex items-center ${theme.foreground}`}>
-                        {result.fileType === 'js' && <FaJs className="text-yellow-400 mr-2" size={12} />}
-                        {result.fileType === 'css' && <FaCss3 className="text-blue-400 mr-2" size={12} />}
-                        {result.fileType === 'html' && <FaHtml5 className="text-orange-400 mr-2" size={12} />}
-                        {result.fileType === 'unknown' && <FaFile className={`${theme.iconColor} mr-2`} size={12} />}
-                        {result.file}
-                      </div>
-                      <div className={`text-xs ${theme.descriptionForeground} pl-4 border-l ml-2 mt-1 ${theme.tabBorder}`}>
-                        <div className="py-1">Line {result.line}: <span className={theme.foreground}>{result.preview}</span></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
         );
@@ -560,55 +535,6 @@ const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, sh
           </div>
         );
         
-      case 'debug':
-        return (
-          <div className="h-full flex flex-col">
-            <div className={`px-4 py-1 font-medium h-[31px] uppercase text-xs flex justify-between items-center border-b ${theme.tabBorder} ${theme.panelTitleForeground}`}>
-              <span>Run and Debug</span>
-              <div className="flex space-x-1">
-                <button className={`p-1 rounded hover:${theme.buttonHoverBackground}`} title="More Actions">
-                  <FaEllipsisH size={12} />
-                </button>
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto no-scrollbar">
-              <div className="p-4 text-center">
-                <div className={`text-sm ${theme.descriptionForeground}`}>No active debug session</div>
-                <button className={`mt-3 px-3 py-1 text-sm ${theme.buttonBackground} ${theme.buttonForeground} rounded-sm hover:${theme.buttonHoverBackground}`}>
-                  Start Debugging
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-    
-      case 'settings':
-        return (
-          <div className="h-full flex flex-col">
-            <div className={`px-4 py-1 font-medium h-[31px] uppercase text-xs border-b ${theme.tabBorder} ${theme.panelTitleForeground}`}>Settings</div>
-            <div className="flex-1 overflow-y-auto no-scrollbar">
-              <div className="p-4">
-                <div className={`text-sm font-medium mb-3 ${theme.foreground}`}>Commonly Used</div>
-                <div className="space-y-3">
-                  {[
-                    { name: 'Editor: Font Size', value: '14px' },
-                    { name: 'Editor: Tab Size', value: '2' },
-                    { name: 'Files: Auto Save', value: 'off' },
-                    { name: 'Workbench: Color Theme', value: 'Dark+' }
-                  ].map((setting, i) => (
-                    <div key={i} className={`p-2 rounded-sm hover:${theme.listHoverBackground}`}>
-                      <div className={`text-sm ${theme.foreground}`}>{setting.name}</div>
-                      <div className={`text-xs ${theme.descriptionForeground}`}>
-                        {setting.value}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-        
       default:
         return (
           <div className="h-full flex flex-col">
@@ -625,60 +551,7 @@ const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, sh
     }
   };
 
-  // Add loading state in the explorer panel
-  const renderFileTreeWithLoading = () => {
-    console.log("Render tree status:", fileTreeStatus, "Tree data:", treeData);
-    
-    if (fileTreeStatus === 'loading') {
-      return (
-        <div className={`flex items-center justify-center py-4 ${theme.descriptionForeground}`}>
-          <FaCircleNotch className="animate-spin mr-2" />
-          <span>Loading files...</span>
-        </div>
-      );
-    }
-    
-    if (fileTreeStatus === 'failed') {
-      return (
-        <div className={`flex flex-col items-center justify-center py-4 ${theme.descriptionForeground}`}>
-          <div className="text-red-500 mb-2">Failed to load files: {fileTreeError}</div>
-          <button 
-            className={`px-2 py-1 text-xs ${theme.buttonBackground} rounded`}
-            onClick={handleRefreshFileTree}
-          >
-            Retry
-          </button>
-        </div>
-      );
-    }
-    
-    if (treeData.length === 0) {
-      return (
-        <div className={`flex flex-col items-center justify-center py-12 ${theme.descriptionForeground}`}>
-          <div className="mb-4 text-center">No files found</div>
-          <button 
-            className={`px-3 py-2 text-sm ${theme.buttonBackground} rounded flex items-center`}
-            onClick={handleImportProject}
-          >
-            <VscNewFolder className="mr-2" />
-            Import Project
-          </button>
-        </div>
-      );
-    }
-    
-    return treeData.map(node => (
-      <FileTreeNode
-        key={node.id}
-        node={node}
-        theme={theme}
-        onToggle={toggleNode}
-        onFileClick={handleFileClick}
-      />
-    ));
-  };
-
-  // If we're only showing icons (the activity bar)
+  // Render activity bar only
   if (showIconsOnly) {
   return (
       <div className={`h-full flex-shrink-0 ${theme.activityBarBackground}`} style={{ width: '48px' }}>
@@ -717,7 +590,7 @@ const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, sh
     );
   }
 
-  // If we're only showing the content panel
+  // Render content panel only
   if (showContentOnly) {
     return (
       <div className={`h-full overflow-hidden flex flex-col w-full ${theme.sidebarBackground}`}>

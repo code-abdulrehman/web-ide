@@ -1,5 +1,7 @@
 import React, { useState, useEffect, createContext } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
+import { Provider } from 'react-redux';
+import { store } from './store';
 import Layout from './components/layout/Layout';
 import SettingsModal from './components/modals/SettingsModal';
 import { themes } from './themes/themes';
@@ -167,7 +169,8 @@ function App() {
     showTerminal
   };
   
-  return (
+  // Main app component wrapped with both Redux Provider and ThemeContext
+  const AppContent = () => (
     <ThemeContext.Provider value={themeContextValue}>
       <div className="min-h-screen">
         <Layout 
@@ -196,6 +199,13 @@ function App() {
         />
       </div>
     </ThemeContext.Provider>
+  );
+  
+  // Wrap the entire app in Provider at this level
+  return (
+    <Provider store={store}>
+      <AppContent />
+    </Provider>
   );
 }
 

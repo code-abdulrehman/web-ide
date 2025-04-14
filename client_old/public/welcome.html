@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Welcome to Web IDE</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background-color: #1e1e1e;
+      color: #d4d4d4;
+      overflow: hidden;
+    }
+    
+    .container {
+      text-align: center;
+      max-width: 600px;
+      animation: fadeIn 0.6s ease-in-out;
+    }
+    
+    .logo {
+      font-size: 72px;
+      margin-bottom: 24px;
+      opacity: 0.2;
+    }
+    
+    h1 {
+      font-size: 2.5rem;
+      font-weight: 300;
+      margin-bottom: 16px;
+    }
+    
+    p {
+      font-size: 1rem;
+      margin-bottom: 32px;
+      color: #a0a0a0;
+      line-height: 1.5;
+    }
+    
+    .buttons {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+    }
+    
+    .button {
+      padding: 8px 16px;
+      font-size: 14px;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: none;
+      outline: none;
+    }
+    
+    .primary {
+      background-color: #0e639c;
+      color: white;
+    }
+    
+    .primary:hover {
+      background-color: #1177bb;
+    }
+    
+    .secondary {
+      background-color: #3a3d41;
+      color: #d4d4d4;
+    }
+    
+    .secondary:hover {
+      background-color: #4b4e52;
+    }
+    
+    .tips {
+      margin-top: 48px;
+      display: flex;
+      gap: 32px;
+      text-align: left;
+    }
+    
+    .tip {
+      flex: 1;
+    }
+    
+    .tip h3 {
+      font-size: 14px;
+      margin-bottom: 8px;
+      color: #cccccc;
+    }
+    
+    .tip p {
+      font-size: 13px;
+      color: #a0a0a0;
+    }
+    
+    .shortcut {
+      background-color: #252526;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: monospace;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">👋</div>
+    <h1>Welcome to Web IDE</h1>
+    <p>A powerful, lightweight IDE for web development right in your browser.</p>
+    
+    <div class="buttons">
+      <button class="button primary" id="new-file">New File</button>
+      <button class="button secondary" id="open-folder">Open Folder</button>
+      <button class="button secondary" id="clone-repository">Clone Repository</button>
+    </div>
+    
+    <div class="tips">
+      <div class="tip">
+        <h3>Get Started</h3>
+        <p>Create a new file, open a folder or clone a git repository to begin.</p>
+        <p>Use <span class="shortcut">Ctrl+N</span> to create a new file.</p>
+      </div>
+      <div class="tip">
+        <h3>Recent Projects</h3>
+        <p>Quick access to your recent projects will appear here.</p>
+        <p>Use <span class="shortcut">Ctrl+R</span> to open the recent projects list.</p>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // This script will be replaced by React handlers in the actual app
+    document.getElementById('new-file').addEventListener('click', () => {
+      console.log('Create new file');
+    });
+    
+    document.getElementById('open-folder').addEventListener('click', () => {
+      console.log('Open folder');
+    });
+    
+    document.getElementById('clone-repository').addEventListener('click', () => {
+      console.log('Clone repository');
+    });
+  </script>
+</body>
+</html> 

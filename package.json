@@ -16,5 +16,8 @@
     "fullstack"
   ],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "directory-tree": "^3.5.2"
+  }
 }
