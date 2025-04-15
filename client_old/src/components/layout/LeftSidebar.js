@@ -19,11 +19,24 @@ import {
   FaEllipsisH,
   FaTimes,
   FaCircleNotch,
-  FaPlus
+  FaPlus,
+  FaFileCode,
+  FaFileImage,
+  FaPython,
+  FaFileAudio,
+  FaFileVideo,
+  FaFileWord,
+  FaFileExcel,
+  FaFilePowerpoint,
+  FaFilePdf,
+  FaGitAlt,
+  FaCheck
 } from 'react-icons/fa';
+import { GiSettingsKnobs } from "react-icons/gi"; // .env
+import { TbFileTypeJsx, TbFileTypeTsx } from "react-icons/tb"; //jsx
 import { VscNewFile, VscNewFolder, VscRefresh, VscCollapseAll } from 'react-icons/vsc';
 import { useSelector, useDispatch } from 'react-redux';
-import { fetchFileTree, readFile, setCurrentFile, closeFile } from '../../store/slices/fileSystemSlice';
+import { fetchFileTree, readFile, setCurrentFile, closeFile, createFile } from '../../store/slices/fileSystemSlice';
 import JsTreeFileExplorer from './JsTreeFileExplorer';
 
 // Main component
@@ -42,6 +55,14 @@ const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, sh
   const [showNoDataOptions, setShowNoDataOptions] = useState(false);
   const [apiCallFailed, setApiCallFailed] = useState(false);
   const [firstLoad, setFirstLoad] = useState(true);
+  const [collapseAllTrigger, setCollapseAllTrigger] = useState(false);
+  const [openFilesCollapsed, setOpenFilesCollapsed] = useState(false);
+  const [showNewFileInput, setShowNewFileInput] = useState(false);
+  const [showNewFolderInput, setShowNewFolderInput] = useState(false);
+  const [newItemName, setNewItemName] = useState('');
+  const [newItemInputVisible, setNewItemInputVisible] = useState(false);
+  const [newItemType, setNewItemType] = useState(null); // 'file' or 'folder'
+  const [folderOpenState, setFolderOpenState] = useState({});
   
   // Define activity bar items
   const activityBarItems = [
@@ -53,7 +74,7 @@ const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, sh
   ];
 
   // Convert the object-based tree to array format - memoize for performance
-  const convertTreeToArray = useCallback((treeObj) => {
+  const convertTreeToArray = useCallback((treeObj, forceCollapsed = false, openState = {}) => {
     if (!treeObj || typeof treeObj !== 'object') {
       return [];
     }
@@ -64,14 +85,33 @@ const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, sh
         return null;
       }
       
+      // Use path as the key for remembering open state
+      const nodePath = node.path || key;
+      
+      // Determine if the folder should be open
+      // 1. If forceCollapsed is true, close all folders
+      // 2. If this path is in openState, use that value
+      // 3. If node has an isOpen property, use that
+      // 4. Default to true
+      let isOpen = false;
+      if (forceCollapsed) {
+        isOpen = false;
+      } else if (openState[nodePath] !== undefined) {
+        isOpen = openState[nodePath];
+      } else if (node.isOpen !== undefined) {
+        isOpen = node.isOpen;
+      } else {
+        isOpen = true;
+      }
+      
       // Create a node with all properties properly copied
       const newNode = {
         id: node.id || key,
         name: node.name || key,
-        path: node.path || key,
+        path: nodePath,
         isFolder: node.isFolder || false,
-        isOpen: true, // Always open, no collapsable folders
-        children: node.children ? convertTreeToArray(node.children) : null
+        isOpen: isOpen,
+        children: node.children ? convertTreeToArray(node.children, forceCollapsed, openState) : null
       };
       
       return newNode;
@@ -95,7 +135,7 @@ const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, sh
         setTreeData([]);
       } else {
         // Process the API data
-        const formattedTree = convertTreeToArray(result);
+        const formattedTree = convertTreeToArray(result, false, folderOpenState);
         setTreeData(formattedTree);
         setShowNoDataOptions(false);
         setApiCallFailed(false);
@@ -118,6 +158,27 @@ const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, sh
     }
   }, [convertTreeToArray, dispatch]);
 
+  // Format the file tree when folder open state changes
+  const formatFileTree = useCallback(() => {
+    if (fileTree) {
+      const formattedTree = convertTreeToArray(fileTree, false, folderOpenState);
+      setTreeData(formattedTree);
+      
+      // Set main folder name if needed
+      if (formattedTree.length > 0 && formattedTree[0]?.path) {
+        const pathParts = formattedTree[0].path.split('/');
+        if (pathParts.length > 0) {
+          setMainFolderName(pathParts[0]);
+        }
+      }
+    }
+  }, [fileTree, folderOpenState, convertTreeToArray]);
+
+  // Apply folder open state changes
+  useEffect(() => {
+    formatFileTree();
+  }, [folderOpenState, formatFileTree]);
+
   // Load data on component mount
   useEffect(() => {
     fetchFileData();
@@ -126,27 +187,18 @@ const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, sh
   // Also update when fileTree changes in Redux
   useEffect(() => {
     if (fileTreeStatus === 'succeeded' && fileTree) {
-      const formattedTree = convertTreeToArray(fileTree);
+      formatFileTree();
       
-      if (formattedTree.length === 0) {
+      if (treeData.length === 0) {
         setShowNoDataOptions(true);
       } else {
-        setTreeData(formattedTree);
         setShowNoDataOptions(false);
-        
-        // Set main folder name
-        if (formattedTree.length > 0 && formattedTree[0]?.path) {
-          const pathParts = formattedTree[0].path.split('/');
-          if (pathParts.length > 0) {
-            setMainFolderName(pathParts[0]);
-          }
-        }
       }
     } else if (fileTreeStatus === 'failed') {
       setApiCallFailed(true);
       setShowNoDataOptions(true);
     }
-  }, [fileTree, fileTreeStatus, convertTreeToArray]);
+  }, [fileTree, fileTreeStatus, formatFileTree, treeData.length]);
 
   // Function to handle file click
   const handleFileClick = (node) => {
@@ -167,15 +219,53 @@ const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, sh
     fetchFileData();
   };
 
+  // Function to collapse all folders in the tree
+  const collapseAll = () => {
+    // Set forceCollapsed to true to collapse all folders
+    setTreeData(convertTreeToArray(fileTree, true, folderOpenState));
+    // Toggle collapseAllTrigger to trigger re-render in children
+    setCollapseAllTrigger(prev => !prev);
+    // Also collapse the Open Files section
+    setOpenFilesCollapsed(true);
+  };
+
   // Get the appropriate icon for file type
   const getFileIcon = (fileName) => {
-    if (fileName.endsWith('.js') || fileName.endsWith('.jsx')) return <FaJs className="text-yellow-400 mr-2" size={12} />;
-    if (fileName.endsWith('.html')) return <FaHtml5 className="text-orange-500 mr-2" size={12} />;
-    if (fileName.endsWith('.css')) return <FaCss3 className="text-blue-500 mr-2" size={12} />;
-    if (fileName.endsWith('.md')) return <FaMarkdown className={theme.descriptionForeground} mr-2 size={12} />;
-    if (fileName.endsWith('.json')) return <FaFileAlt className="text-yellow-300 mr-2" size={12} />;
-    if (fileName.endsWith('.tsx') || fileName.endsWith('.ts')) return <FaCode className="text-blue-400 mr-2" size={12} />;
-    return <FaFile className={theme.iconColor} mr-2 size={12} />;
+    if (fileName.endsWith('.js') || fileName.endsWith('.jsx')) {
+      return <FaJs className="text-yellow-400" size={12} />;
+    } else if (fileName.endsWith('.html') || fileName.endsWith('.htm')) {
+      return <FaHtml5 className="text-orange-500" size={12} />;
+    } else if (fileName.endsWith('.css')) {
+      return <FaCss3 className="text-blue-500" size={12} />;
+    } else if (fileName.endsWith('.md')) {
+      return <FaMarkdown className={theme.descriptionForeground} size={12} />;
+    } else if (fileName.endsWith('.json')) {
+      return <FaFileAlt className="text-yellow-300" size={12} />;
+    } else if (fileName.endsWith('.jsx')) {
+      return <TbFileTypeJsx className="text-blue-400" size={12} />;
+    } else if (fileName.endsWith('.tsx') || fileName.endsWith('.ts')) {
+      return <TbFileTypeTsx className="text-blue-400" size={12} />;
+    } else if (fileName.endsWith('.py')) {
+      return <FaPython className="text-blue-500" size={12} />;
+    } else if (fileName.endsWith('.mp3') || fileName.endsWith('.wav') || fileName.endsWith('.m4a')) {
+      return <FaFileAudio className="text-green-400" size={12} />;
+    } else if (fileName.endsWith('.mp4') || fileName.endsWith('.mov') || fileName.endsWith('.avi')) {
+      return <FaFileVideo className="text-red-400" size={12} />;
+    } else if (fileName.endsWith('.docx') || fileName.endsWith('.doc')) {
+      return <FaFileWord className="text-blue-400" size={12} />;
+    } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+      return <FaFileExcel className="text-green-400" size={12} />;
+    } else if (fileName.endsWith('.pptx') || fileName.endsWith('.ppt')) {
+      return <FaFilePowerpoint className="text-red-400" size={12} />;
+    } else if (fileName.endsWith('.pdf')) {
+      return <FaFilePdf className="text-red-400" size={12} />;
+    } else if (fileName.endsWith('.env')) {
+      return <GiSettingsKnobs className="text-yellow-400" size={12} />;
+    } else if (fileName.includes('.git')) {
+      return <FaGitAlt className="text-rose-500" size={12} />;
+    }
+    
+    return <FaFile className={theme.iconColor} size={12} />;
   };
 
   // Handle click on activity bar item
@@ -242,7 +332,7 @@ const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, sh
       >
         <div className="flex items-center truncate">
           {getFileIcon(file.name)}
-          <span className="ml-2 truncate">{file.name}</span>
+          <span className={`${theme.foreground} ml-2 truncate`}>{file.name}</span>
           {openFiles[file.path]?.isDirty && (
             <span className="ml-1 text-xs">•</span>
           )}
@@ -355,6 +445,34 @@ const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, sh
     setShowNoDataOptions(false);
   };
 
+  // Handle new file/folder creation
+  const handleNewItemClick = (type) => {
+    setNewItemType(type);
+    setNewItemName('');
+    setNewItemInputVisible(true);
+  };
+
+  const handleNewItemCreate = () => {
+    if (!newItemName.trim()) {
+      setNewItemInputVisible(false);
+      return;
+    }
+
+    // Determine parent path
+    const parentPath = treeData.length > 0 ? treeData[0].path.split('/')[0] : '';
+    const itemPath = parentPath ? `${parentPath}/${newItemName}` : newItemName;
+
+    dispatch(createFile({
+      path: itemPath,
+      type: newItemType
+    })).then(() => {
+      // Refresh file tree after creation
+      dispatch(fetchFileTree());
+    });
+
+    setNewItemInputVisible(false);
+  };
+
   // Render the no data or error view
   const renderNoDataView = () => {
     return (
@@ -363,7 +481,7 @@ const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, sh
           <>
             <div className="text-red-500 mb-4 text-center">Failed to load files</div>
             <button 
-              className={`px-3 py-2 text-sm ${theme.buttonBackground} rounded flex items-center`}
+              className={`px-3 py-2 text-sm ${theme.buttonBackground} ${theme.buttonForeground} rounded flex items-center`}
               onClick={handleRefreshFileTree}
             >
               <VscRefresh className="mr-2" />
@@ -375,14 +493,14 @@ const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, sh
             <div className="mb-4 text-center">No files found</div>
             <div className="flex flex-col space-y-2">
               <button 
-                className={`px-3 py-2 text-sm ${theme.buttonBackground} rounded flex items-center`}
+                className={`px-3 py-2 text-sm ${theme.buttonBackground} ${theme.buttonForeground} rounded flex items-center`}
                 onClick={handleImportProject}
               >
                 <VscNewFolder className="mr-2" />
                 Import Project
               </button>
               <button 
-                className={`px-3 py-2 text-sm ${theme.buttonBackground} rounded flex items-center`}
+                className={`px-3 py-2 text-sm ${theme.buttonBackground} ${theme.buttonForeground} rounded flex items-center`}
                 onClick={handleCreateProject}
               >
                 <FaPlus className="mr-2" />
@@ -397,58 +515,105 @@ const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, sh
 
   // Explorer panel
   const renderExplorerPanel = () => {
-        return (
-          <div className="h-full flex flex-col">
-            <div className={`px-4 py-1 font-medium h-[31px] uppercase text-xs flex justify-between items-center border-b ${theme.tabBorder} ${theme.panelTitleForeground}`}>
+    return (
+      <div className="h-full flex flex-col">
+        <div className={`px-4 py-1 font-medium h-[31px] uppercase text-xs flex justify-between items-center border-b ${theme.tabBorder} ${theme.panelTitleForeground}`}>
           <span>{mainFolderName}</span>
-              <div className="flex space-x-1">
+          <div className="flex space-x-1">
             <button 
               className={`p-1 rounded hover:${theme.buttonHoverBackground}`} 
               title="New File"
-              onClick={() => {/* Handle new file */}}
+              onClick={() => handleNewItemClick('file')}
             >
-                  <VscNewFile size={14} />
-                </button>
+              <VscNewFile size={14} />
+            </button>
             <button 
               className={`p-1 rounded hover:${theme.buttonHoverBackground}`} 
               title="New Folder"
-              onClick={() => {/* Handle new folder */}}
+              onClick={() => handleNewItemClick('folder')}
             >
-                  <VscNewFolder size={14} />
-                </button>
-                <button 
+              <VscNewFolder size={14} />
+            </button>
+            <button 
               className={`p-1 rounded hover:${theme.buttonHoverBackground} relative`} 
-                  title="Refresh Explorer"
-                  onClick={handleRefreshFileTree}
+              title="Refresh Explorer"
+              onClick={handleRefreshFileTree}
               disabled={isLoading}
-                >
+            >
               {isLoading ? (
                 <FaCircleNotch size={14} className="animate-spin" />
               ) : (
-                  <VscRefresh size={14} />
+                <VscRefresh size={14} />
               )}
+            </button>
+
+            <button className={`p-1 rounded hover:${theme.buttonHoverBackground}`} title="Collapse All" onClick={collapseAll}>
+              <VscCollapseAll size={14} />
+            </button>
+          </div>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto no-scrollbar">
+          {/* New File/Folder Input */}
+          {newItemInputVisible && (
+            <div className={`p-2 ${theme.inputBackground}`}>
+              <div className="flex items-center">
+                <input
+                  type="text"
+                  value={newItemName}
+                  onChange={(e) => setNewItemName(e.target.value)}
+                  placeholder={newItemType === 'file' ? 'filename.js' : 'folder name'}
+                  className={`flex-1 px-2 py-1 text-sm rounded-sm border ${theme.inputBorder} focus:outline-none`}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleNewItemCreate();
+                    if (e.key === 'Escape') setNewItemInputVisible(false);
+                  }}
+                  autoFocus
+                />
+                <button 
+                  className={`ml-1 p-1 rounded hover:${theme.buttonHoverBackground}`}
+                  onClick={handleNewItemCreate}
+                >
+                  <FaCheck size={10} />
+                </button>
+                <button 
+                  className={`ml-1 p-1 rounded hover:${theme.buttonHoverBackground}`}
+                  onClick={() => setNewItemInputVisible(false)}
+                >
+                  <FaTimes size={10} />
                 </button>
               </div>
             </div>
-            
-            <div className="flex-1 overflow-y-auto no-scrollbar">
+          )}
+        
           {/* Open Files Section */}
-              <div className="mb-2">
-            <div className={`flex items-center px-4 py-2 ${theme.panelTitleForeground}`}>
+          <div className="px-0">
+            <div
+              className={`flex items-center px-2 py-2 ${theme.panelTitleForeground} hover:${theme.listHoverBackground} cursor-pointer`} 
+              onClick={() => setOpenFilesCollapsed(!openFilesCollapsed)}
+            >
+              <span className="mr-1">
+                {openFilesCollapsed ? 
+                  <FaChevronRight size={10} className={theme.iconColor}/> : 
+                  <FaChevronDown size={10} className={theme.iconColor}/>
+                }
+              </span>
               <span className="text-xs uppercase font-medium">Open Files</span>
-                </div>
+            </div>
                 
-            <div className="pl-2">
-              {renderOpenEditors()}
-                    </div>
-                  </div>
+            {!openFilesCollapsed && (
+              <div className="pl-2">
+                {renderOpenEditors()}
+              </div>
+            )}
+          </div>
           
           {/* File Explorer */}
-          <div className="px-2 mt-4">
+          <div className="px-2 mt-1">
             {isLoading && firstLoad ? (
               <div className={`flex items-center justify-center py-4 ${theme.descriptionForeground}`}>
                 <FaCircleNotch className="animate-spin mr-2" />
-                <span>Loading files...</span>
+                <span className={theme.descriptionForeground}>Loading files...</span>
               </div>
             ) : showNoDataOptions || treeData.length === 0 ? (
               renderNoDataView()
@@ -458,6 +623,13 @@ const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, sh
                 onFileSelect={handleFileClick}
                 theme={theme}
                 currentFile={currentFile}
+                collapseAllTrigger={collapseAllTrigger}
+                onFolderToggle={(path, isOpen) => {
+                  setFolderOpenState(prev => ({
+                    ...prev,
+                    [path]: isOpen
+                  }));
+                }}
               />
             )}
             
@@ -465,12 +637,13 @@ const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, sh
             {isLoading && !firstLoad && (
               <div className="absolute bottom-2 right-2 p-1">
                 <FaCircleNotch className="animate-spin text-xs opacity-50" />
-                  </div>
-                )}
               </div>
-            </div>
+            )}
           </div>
-        );
+        </div>
+{/* bottom */}
+      </div>
+    );
   };
   
   // Panel content renderer

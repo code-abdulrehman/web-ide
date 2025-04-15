@@ -56,10 +56,22 @@ export const createFile = createAsyncThunk(
   'fileSystem/createFile',
   async ({ path, type }, { rejectWithValue }) => {
     try {
+      console.log(`Attempting to create ${type} at path: ${path}`);
       const response = await axios.post(`${API_URL}/api/files/create`, { path, type });
-      return response.data;
+      console.log('Create file/folder response:', response.data);
+      return { ...response.data, type };
     } catch (error) {
-      return rejectWithValue(error.response?.data || 'Failed to create file');
+      console.error(`Error creating ${type}:`, error);
+      if (error.response) {
+        // The request was made and the server responded with an error status
+        return rejectWithValue(error.response.data);
+      } else if (error.request) {
+        // The request was made but no response was received
+        return rejectWithValue({ error: 'No response from server', details: 'Network error' });
+      } else {
+        // Something happened in setting up the request
+        return rejectWithValue({ error: 'Request setup error', details: error.message });
+      }
     }
   }
 );
@@ -72,6 +84,18 @@ export const deleteFile = createAsyncThunk(
       return { path, ...response.data };
     } catch (error) {
       return rejectWithValue(error.response?.data || 'Failed to delete file');
+    }
+  }
+);
+
+export const renameFile = createAsyncThunk(
+  'fileSystem/renameFile',
+  async ({ oldPath, newPath }, { rejectWithValue }) => {
+    try {
+      const response = await axios.put(`${API_URL}/api/files/rename`, { oldPath, newPath });
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data || 'Failed to rename file');
     }
   }
 );
@@ -219,9 +243,19 @@ export const fileSystemSlice = createSlice({
       })
       
       // Create file/folder
+      .addCase(createFile.pending, (state) => {
+        state.status = 'loading';
+      })
       .addCase(createFile.fulfilled, (state, action) => {
         state.status = 'succeeded';
+        // Success message can be displayed if needed
+        console.log(`Successfully created ${action.payload.type}: ${action.payload.path}`);
         // We'll refetch the file tree after creating a file
+      })
+      .addCase(createFile.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload || { error: 'Unknown error occurred' };
+        console.error('Failed to create file/folder:', state.error);
       })
       
       // Delete file/folder
@@ -233,6 +267,32 @@ export const fileSystemSlice = createSlice({
           delete state.openFiles[path];
         }
         // We'll refetch the file tree after deleting a file
+      })
+      
+      // Rename file/folder
+      .addCase(renameFile.pending, (state) => {
+        state.status = 'loading';
+      })
+      .addCase(renameFile.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        const { oldPath, newPath } = action.payload;
+        
+        // If the renamed file was open, update the references
+        if (state.openFiles[oldPath]) {
+          // Copy content to the new path
+          state.openFiles[newPath] = { ...state.openFiles[oldPath] };
+          // Delete the old reference
+          delete state.openFiles[oldPath];
+          
+          // Update current file if it was the renamed one
+          if (state.currentFile === oldPath) {
+            state.currentFile = newPath;
+          }
+        }
+      })
+      .addCase(renameFile.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload;
       });
   },
 });

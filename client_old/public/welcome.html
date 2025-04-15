@@ -28,7 +28,6 @@
     .logo {
       font-size: 72px;
       margin-bottom: 24px;
-      opacity: 0.2;
     }
     
     h1 {
@@ -115,12 +114,13 @@
 </head>
 <body>
   <div class="container">
-    <div class="logo">👋</div>
+    <h2 class="logo" style="opacity: 100 !important;">👋</h2>
     <h1>Welcome to Web IDE</h1>
     <p>A powerful, lightweight IDE for web development right in your browser.</p>
     
     <div class="buttons">
-      <button class="button primary" id="new-file">New File</button>
+      <button class="button primary">New File</button>
+      <!-- <button class="button primary" id="new-file">New File</button>-->
       <button class="button secondary" id="open-folder">Open Folder</button>
       <button class="button secondary" id="clone-repository">Clone Repository</button>
     </div>
