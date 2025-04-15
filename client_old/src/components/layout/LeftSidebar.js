@@ -327,7 +327,7 @@ const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, sh
     return openFilesList.map((file, index) => (
       <div 
         key={index}
-        className={`px-2 py-1 text-sm rounded flex items-center justify-between hover:${theme.listHoverBackground} ${file.isActive ? theme.listActiveBackground : ''}`}
+        className={`px-2 py-1 text-sm rounded flex items-center justify-between hover:${theme.listHoverBackground} ${file.isActive ? theme.listActiveForeground : ''}`}
         onClick={() => dispatch(setCurrentFile(file.path))}
       >
         <div className="flex items-center truncate">
@@ -517,8 +517,9 @@ const LeftSidebar = ({ isOpen, setIsOpen, activePanel, setActivePanel, theme, sh
   const renderExplorerPanel = () => {
     return (
       <div className="h-full flex flex-col">
-        <div className={`px-4 py-1 font-medium h-[31px] uppercase text-xs flex justify-between items-center border-b ${theme.tabBorder} ${theme.panelTitleForeground}`}>
-          <span>{mainFolderName}</span>
+        <div className={`px-2 py-1 font-medium h-[31px] uppercase text-xs flex justify-between items-center border-b ${theme.tabBorder} ${theme.panelTitleForeground}`}>
+          {/* <span>{mainFolderName}</span> */}
+          <span>Explorer</span>
           <div className="flex space-x-1">
             <button 
               className={`p-1 rounded hover:${theme.buttonHoverBackground}`} 

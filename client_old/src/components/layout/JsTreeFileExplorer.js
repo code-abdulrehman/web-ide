@@ -404,9 +404,10 @@ const FileTreeNode = ({
       <div className="pl-2">
         {/* Only render children nodes when the folder is open */}
         {isOpen && hasChildren && 
-          Object.values(node.children).map((childNode) => (
+          Object.values(node.children).map((childNode, index) => (
+          <>
             <FileTreeNode
-              key={childNode.path || childNode.id}
+              key={childNode.id}
               node={childNode}
               onFileSelect={onFileSelect}
               currentFile={currentFile}
@@ -415,6 +416,8 @@ const FileTreeNode = ({
               collapseAllTrigger={collapseAllTrigger}
               onFolderToggle={onFolderToggle}
             />
+            {console.log(level, "level")}
+          </>
           ))
         }
         
@@ -434,7 +437,7 @@ const FileTreeNode = ({
   return (
     <div>
       <div 
-        className={`flex items-center py-1 px-2 cursor-pointer text-sm rounded-sm hover:${theme.listHoverBackground} ${isActive ? theme.listActiveForeground : ''}`}
+        className={`flex items-center py-1 px-2 cursor-pointer text-sm rounded-sm hover:${theme.listHoverBackground} ${isActive ? theme.listActiveForeground : `${theme.foreground}`}`}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
         style={{ paddingLeft: `${level * 1}px` }}
@@ -445,7 +448,8 @@ const FileTreeNode = ({
           </span>
         )}
         
-        <span className="mr-2">{getFileIcon()}</span>
+        <span className={`mr-2 ${theme.iconColor} ${level === 0 ? "hidden" : ""}`}>{getFileIcon()}</span>
+ 
         
         {isRenaming ? (
           <RenameInput 
@@ -454,7 +458,10 @@ const FileTreeNode = ({
             onSave={handleRename}
           />
         ) : (
-          <span className={`${theme.foreground} truncate`}>{node.name}</span>
+         <span className={` ${level === 0 ? `${theme.panelTitleForeground} uppercase font-medium text-xs` : `${theme.foreground}`} truncate`}>
+{ node.name}
+</span>
+
         )}
       </div>
       
