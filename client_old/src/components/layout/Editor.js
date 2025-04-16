@@ -547,13 +547,13 @@ const EditorComponent = ({ theme, fontSize = 14 }) => {
           {/* Save button */}
           {activeTab && openFiles[activeTab] && (
             <button 
-              className={`px-2 py-1 flex items-center justify-center hover:${theme.buttonHoverBackground} transition-colors duration-150 ${isSaving ? 'bg-green-700 bg-opacity-20' : ''}`}
+              className={`px-2 py-1 flex items-center justify-center hover:${theme.buttonHoverBackground} transition-colors duration-150`}
               onClick={handleSaveFile}
               title="Save file (Ctrl+Alt+S)"
               disabled={isSaving}
             >
               <FaRegSave className={`text-sm ${isSaving ? 'text-green-400 animate-pulse' : theme.iconColor}`} />
-              {isSaving && <span className="ml-1 text-xs text-green-400">Saving...</span>}
+              {/* {isSaving && <span className="ml-1 text-xs text-green-400">Saving...</span>} */}
             </button>
           )}
         </div>

@@ -64,7 +64,7 @@ export const darkTheme = {
   // Lists
   listHoverBackground: "hover:bg-gray-700",
   listActiveBackground: "bg-gray-700",
-  listActiveForeground: "font-bold underline text-white",
+  listActiveForeground: "font-medium underline text-white",
   
   // Buttons
   buttonBackground: "bg-blue-600",
@@ -153,7 +153,7 @@ export const lightTheme = {
   // Lists
   listHoverBackground: "hover:bg-gray-100",
   listActiveBackground: "bg-gray-200",
-  listActiveForeground: "font-bold underline text-gray-900",
+  listActiveForeground: "font-medium underline text-gray-900",
   
   // Buttons
   buttonBackground: "bg-blue-600",
@@ -242,7 +242,7 @@ export const highContrastTheme = {
   // Lists
   listHoverBackground: "hover:bg-yellow-900 hover:bg-opacity-30",
   listActiveBackground: "bg-yellow-900 bg-opacity-50",
-  listActiveForeground: "font-bold underline text-white",
+  listActiveForeground: "font-medium underline text-white",
   
   // Buttons
   buttonBackground: "bg-yellow-600",

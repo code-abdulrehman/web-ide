@@ -34,7 +34,7 @@ import { useDispatch } from 'react-redux';
 import { createFile, deleteFile, renameFile, fetchFileTree } from '../../store/slices/fileSystemSlice';
 
 // Context Menu Component
-const ContextMenu = ({ x, y, items, onClose }) => {
+const ContextMenu = ({ x, y, items, onClose, theme }) => {
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -53,14 +53,14 @@ const ContextMenu = ({ x, y, items, onClose }) => {
   return (
     <div 
       ref={menuRef}
-      className="absolute bg-gray-800 border border-gray-700 rounded shadow-lg z-50 text-sm"
+      className={`${theme.descriptionForeground} bg-transparent backdrop-blur-sm min-w-32 w-40 absolute border border-gray-700 rounded shadow-lg z-50 text-sm`}
       style={{ top: `${y}px`, left: `${x}px` }}
     >
       <ul className="py-1">
         {items.map((item, index) => (
           <li 
             key={index}
-            className="px-4 py-2 hover:bg-gray-700 cursor-pointer flex items-center"
+            className={` ${theme.buttonHoverBackground} px-4 py-2 cursor-pointer flex items-center`}
             onClick={() => {
               item.onClick();
               onClose();
@@ -76,7 +76,7 @@ const ContextMenu = ({ x, y, items, onClose }) => {
 };
 
 // New File/Folder Input Component
-const NewItemInput = ({ parentPath, type, onCancel, onSave }) => {
+const NewItemInput = ({ parentPath, type, onCancel, onSave, theme }) => {
   const [name, setName] = useState('');
   const inputRef = useRef(null);
   
@@ -106,7 +106,7 @@ const NewItemInput = ({ parentPath, type, onCancel, onSave }) => {
         onChange={(e) => setName(e.target.value)}
         onKeyDown={handleKeyDown}
         onBlur={() => name.trim() ? onSave(name) : onCancel()}
-        className="bg-gray-700 border border-gray-600 rounded px-2 py-1 w-full text-sm"
+        className={`${theme.descriptionForeground} ${theme.inputBackground} border rounded px-2 py-1 w-full text-sm`}
         placeholder={type === 'file' ? 'filename.js' : 'folder name'}
       />
     </div>
@@ -114,7 +114,7 @@ const NewItemInput = ({ parentPath, type, onCancel, onSave }) => {
 };
 
 // RenameInput Component
-const RenameInput = ({ node, onCancel, onSave }) => {
+const RenameInput = ({ node, onCancel, onSave, theme }) => {
   const [name, setName] = useState(node.name);
   const inputRef = useRef(null);
   
@@ -155,7 +155,7 @@ const RenameInput = ({ node, onCancel, onSave }) => {
       onChange={(e) => setName(e.target.value)}
       onKeyDown={handleKeyDown}
       onBlur={() => onCancel()}
-      className="bg-gray-700 border border-gray-600 rounded px-2 py-1 w-full text-sm mx-2"
+      className={`${theme.descriptionForeground} ${theme.inputBackground} border border-gray-600 rounded px-2 py-1 w-full text-sm mx-2`}
     />
   );
 };
@@ -401,11 +401,11 @@ const FileTreeNode = ({
     // Always render this div when it's a folder - regardless of isOpen
     // This ensures the creation input is shown even if folder was closed
     return (
-      <div className="pl-2">
+      <div className="ml-2">
         {/* Only render children nodes when the folder is open */}
         {isOpen && hasChildren && 
           Object.values(node.children).map((childNode, index) => (
-          <>
+          <div className="border-l border-l-[#333] group-hover:border-l-[#444]" style={{ marginLeft: (level === 0 || level === 1) ? "3px": ((level *level*4  +4 )/level)+"px" }}>
             <FileTreeNode
               key={childNode.id}
               node={childNode}
@@ -416,14 +416,14 @@ const FileTreeNode = ({
               collapseAllTrigger={collapseAllTrigger}
               onFolderToggle={onFolderToggle}
             />
-            {console.log(level, "level")}
-          </>
+          </div>
           ))
         }
         
         {/* Always show the new item input when creating, even if folder was closed */}
         {isCreatingNewItem && (
           <NewItemInput 
+          theme={theme}
             parentPath={node.path}
             type={isCreatingNewItem}
             onCancel={() => setIsCreatingNewItem(null)}
@@ -437,40 +437,55 @@ const FileTreeNode = ({
   return (
     <div>
       <div 
-        className={`flex items-center py-1 px-2 cursor-pointer text-sm rounded-sm hover:${theme.listHoverBackground} ${isActive ? theme.listActiveForeground : `${theme.foreground}`}`}
+        className={`group flex items-center ${level === 0 ? "px-0" : "px-2"} cursor-pointer text-sm hover:${theme.listHoverBackground} ${isActive ? theme.listActiveForeground : theme.foreground}`}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
-        style={{ paddingLeft: `${level * 1}px` }}
+        style={{ 
+          paddingLeft: `${level === 0 || level === 1 ? "5px" : (level *level*4  +5 )/level+"px"}`,
+          position: 'relative'
+        }}
       >
-        {hasChildren && (
-          <span className="mr-1">
-            {isOpen ? <FaChevronDown size={10} className={theme.iconColor}/> : <FaChevronRight size={10} className={theme.iconColor}/>}
-          </span>
-        )}
-        
-        <span className={`mr-2 ${theme.iconColor} ${level === 0 ? "hidden" : ""}`}>{getFileIcon()}</span>
- 
-        
-        {isRenaming ? (
-          <RenameInput 
-            node={node}
-            onCancel={() => setIsRenaming(false)}
-            onSave={handleRename}
+        {/* Left border for grouping folders/files */}
+        {level > 0 && (
+          <div 
+            className={`absolute left-0 h-full opacity-30 group-hover:opacity-100 bg-transparent`}
+            style={{ 
+              width: '1px',
+              left: `${level === 0 || level === 1 ? "3px" : (level *level*4  +4 )/level+"px"}`
+            }}
           />
-        ) : (
-         <span className={` ${level === 0 ? `${theme.panelTitleForeground} uppercase font-medium text-xs` : `${theme.foreground}`} truncate`}>
-{ node.name}
-</span>
-
         )}
+        
+        <div className="flex items-center py-1">
+          {hasChildren && (
+            <span className="mr-1">
+              {isOpen ? <FaChevronDown size={10} className={theme.iconColor}/> : <FaChevronRight size={10} className={theme.iconColor}/>}
+            </span>
+          )}
+          
+          <span className={`${theme.iconColor} ${level === 0 ? "hidden" : "mx-1"}`}>{getFileIcon()}</span>
+          
+          {isRenaming ? (
+            <RenameInput 
+              node={node}
+              theme={theme}
+              onCancel={() => setIsRenaming(false)}
+              onSave={handleRename}
+            />
+          ) : (
+            <span className={`${level === 0 ? `${theme.panelTitleForeground} uppercase font-medium text-xs` : `${theme.foreground}`} truncate`}>
+              {node.name}
+            </span>
+          )}
+        </div>
       </div>
-      
       {renderChildren()}
       
       {contextMenu && (
         <ContextMenu 
           x={contextMenu.x} 
           y={contextMenu.y} 
+          theme={theme}
           items={contextMenu.items}
           onClose={() => setContextMenu(null)}
         />
@@ -545,6 +560,7 @@ const JsTreeFileExplorer = ({
           <ContextMenu 
             x={contextMenu.x} 
             y={contextMenu.y} 
+            theme={theme}
             items={contextMenu.items}
             onClose={() => setContextMenu(null)}
           />
@@ -570,6 +586,7 @@ const JsTreeFileExplorer = ({
       {isCreatingNewItem && (
         <NewItemInput 
           parentPath=""
+          theme={theme}
           type={isCreatingNewItem}
           onCancel={() => setIsCreatingNewItem(null)}
           onSave={handleCreateItem}
@@ -580,6 +597,7 @@ const JsTreeFileExplorer = ({
         <ContextMenu 
           x={contextMenu.x} 
           y={contextMenu.y} 
+          theme={theme}
           items={contextMenu.items}
           onClose={() => setContextMenu(null)}
         />
