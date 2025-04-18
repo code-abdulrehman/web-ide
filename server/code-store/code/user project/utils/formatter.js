@@ -4,14 +4,14 @@
 
 // Format a date in a human-readable way
 export const formatDate = (date) => {
-  const options = { 
-    year: 'numeric', 
-    month: 'short', 
+  const options = {
+    year: 'numeric',
+    month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit'
   };
-  
+
   return new Date(date).toLocaleDateString(undefined, options);
 };
 

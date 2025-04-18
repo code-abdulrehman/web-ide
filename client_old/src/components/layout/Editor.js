@@ -19,13 +19,20 @@ import {
   FaFilePowerpoint,
   FaFilePdf,
   FaGitAlt,
-  FaRegSave
+  FaRegSave,
+  FaExchangeAlt,
+  FaCodeBranch,
+  FaColumns,
+  FaEllipsisV,
+  FaSearch,
+  FaCode,
+  FaCog
 } from 'react-icons/fa';
 import { GiSettingsKnobs } from "react-icons/gi"; // .env
 import { TbFileTypeJsx, TbFileTypeTsx } from "react-icons/tb"; //jsx
 import Editor from '@monaco-editor/react';
 import { useSelector, useDispatch } from 'react-redux';
-import { updateFileContent, closeFile, setCurrentFile, markFileSaved, saveFile } from '../../store/slices/fileSystemSlice';
+import { updateFileContent, closeFile, setCurrentFile, markFileSaved, saveFile, readFile } from '../../store/slices/fileSystemSlice';
 import { 
   connectSocket, 
   disconnectSocket, 
@@ -33,6 +40,236 @@ import {
   sendCodeChanges, 
   saveFileChanges
 } from '../../services/socketService';
+import CompareEditor from './CompareEditor';
+import FileCompareModal from '../modals/FileCompareModal';
+
+// EditorDropdown Component
+const EditorDropdown = ({ theme, onOptionSelect }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+  
+  const options = [
+    { id: 'compare', label: 'Compare Files', icon: <FaColumns size={12} /> },
+    { id: 'search', label: 'Find in Files', icon: <FaSearch size={12} /> },
+    { id: 'format', label: 'Format Document', icon: <FaCode size={12} /> },
+    { id: 'settings', label: 'Editor Settings', icon: <FaCog size={12} /> }
+  ];
+  
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        className={`px-2 py-1 flex items-center justify-center hover:${theme.buttonHoverBackground} transition-colors duration-150`}
+        onClick={() => setIsOpen(!isOpen)}
+        title="Editor Options"
+      >
+        <FaEllipsisV className={`text-sm ${theme.iconColor}`} />
+      </button>
+      
+      {isOpen && (
+        <div className={`absolute right-0 mt-1 w-48 rounded-md shadow-lg ${theme.background} ring-1 ring-black ring-opacity-5 focus:outline-none z-50`}>
+          <div className={`py-1 border ${theme.border} rounded`} role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
+            {options.map((option) => (
+              <button
+                key={option.id}
+                className={`w-full text-left px-4 py-2 flex items-center hover:${theme.buttonHoverBackground} ${theme.foreground}`}
+                onClick={() => {
+                  onOptionSelect(option.id);
+                  setIsOpen(false);
+                }}
+                role="menuitem"
+              >
+                <span className="mr-2">{option.icon}</span>
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Search In Files Modal Component
+const SearchFilesModal = ({ theme, onClose }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+      <div className={`w-full max-w-2xl max-h-[90vh] ${theme.background} rounded shadow-lg flex flex-col`}>
+        {/* Header */}
+        <div className={`flex items-center justify-between p-4 border-b ${theme.border}`}>
+          <h2 className={`text-xl font-medium ${theme.foreground}`}>Find in Files</h2>
+          <button 
+            onClick={onClose}
+            className={`p-1 rounded hover:${theme.buttonHoverBackground}`}
+          >
+            <FaTimes className={theme.iconColor} />
+          </button>
+        </div>
+        
+        {/* Search Input */}
+        <div className="p-4">
+          <div className="flex">
+            <input
+              type="text"
+              placeholder="Search term..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className={`flex-1 px-3 py-2 rounded-l border ${theme.inputBackground} ${theme.foreground} ${theme.inputBorder}`}
+            />
+            <button 
+              className={`px-4 py-2 rounded-r ${theme.buttonBackground} ${theme.buttonForeground} hover:${theme.buttonHoverBackground}`}
+              onClick={() => console.log('Search for:', searchTerm)}
+            >
+              <FaSearch />
+            </button>
+          </div>
+          
+          <div className="mt-2 flex space-x-4">
+            <label className="flex items-center">
+              <input type="checkbox" className="mr-2" />
+              <span className={`text-sm ${theme.foreground}`}>Match case</span>
+            </label>
+            <label className="flex items-center">
+              <input type="checkbox" className="mr-2" />
+              <span className={`text-sm ${theme.foreground}`}>Whole word</span>
+            </label>
+            <label className="flex items-center">
+              <input type="checkbox" className="mr-2" />
+              <span className={`text-sm ${theme.foreground}`}>Use regex</span>
+            </label>
+          </div>
+        </div>
+        
+        {/* Results Area (placeholder) */}
+        <div className={`flex-grow overflow-auto p-4 border-t ${theme.border}`}>
+          <div className={`flex items-center justify-center h-full ${theme.descriptionForeground}`}>
+            Search results will appear here
+          </div>
+        </div>
+        
+        {/* Footer */}
+        <div className={`p-4 border-t ${theme.border} flex justify-end space-x-2`}>
+          <button 
+            onClick={onClose}
+            className={`px-4 py-2 rounded ${theme.secondaryButtonBackground} ${theme.secondaryButtonForeground} hover:${theme.secondaryButtonHoverBackground}`}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Editor Settings Modal Component
+const EditorSettingsModal = ({ theme, fontSize, onClose, onUpdateSettings }) => {
+  const [newFontSize, setNewFontSize] = useState(fontSize);
+  const [wordWrap, setWordWrap] = useState('on');
+  const [tabSize, setTabSize] = useState(2);
+  
+  const handleSave = () => {
+    onUpdateSettings({
+      fontSize: newFontSize,
+      wordWrap,
+      tabSize
+    });
+    onClose();
+  };
+  
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+      <div className={`w-full max-w-md max-h-[90vh] ${theme.background} rounded shadow-lg flex flex-col`}>
+        {/* Header */}
+        <div className={`flex items-center justify-between p-4 border-b ${theme.border}`}>
+          <h2 className={`text-xl font-medium ${theme.foreground}`}>Editor Settings</h2>
+          <button 
+            onClick={onClose}
+            className={`p-1 rounded hover:${theme.buttonHoverBackground}`}
+          >
+            <FaTimes className={theme.iconColor} />
+          </button>
+        </div>
+        
+        {/* Settings Form */}
+        <div className="p-4 overflow-auto">
+          <div className="mb-4">
+            <label className={`block mb-2 text-sm font-medium ${theme.foreground}`}>
+              Font Size
+            </label>
+            <input
+              type="number"
+              value={newFontSize}
+              onChange={(e) => setNewFontSize(Number(e.target.value))}
+              min="8"
+              max="32"
+              className={`w-full px-3 py-2 rounded border ${theme.inputBackground} ${theme.foreground} ${theme.inputBorder}`}
+            />
+          </div>
+          
+          <div className="mb-4">
+            <label className={`block mb-2 text-sm font-medium ${theme.foreground}`}>
+              Word Wrap
+            </label>
+            <select
+              value={wordWrap}
+              onChange={(e) => setWordWrap(e.target.value)}
+              className={`w-full px-3 py-2 rounded border ${theme.inputBackground} ${theme.foreground} ${theme.inputBorder}`}
+            >
+              <option value="on">On</option>
+              <option value="off">Off</option>
+              <option value="wordWrapColumn">Bounded</option>
+            </select>
+          </div>
+          
+          <div className="mb-4">
+            <label className={`block mb-2 text-sm font-medium ${theme.foreground}`}>
+              Tab Size
+            </label>
+            <input
+              type="number"
+              value={tabSize}
+              onChange={(e) => setTabSize(Number(e.target.value))}
+              min="1"
+              max="8"
+              className={`w-full px-3 py-2 rounded border ${theme.inputBackground} ${theme.foreground} ${theme.inputBorder}`}
+            />
+          </div>
+        </div>
+        
+        {/* Footer */}
+        <div className={`p-4 border-t ${theme.border} flex justify-end space-x-2`}>
+          <button 
+            onClick={onClose}
+            className={`px-4 py-2 rounded ${theme.secondaryButtonBackground} ${theme.secondaryButtonForeground} hover:${theme.secondaryButtonHoverBackground}`}
+          >
+            Cancel
+          </button>
+          <button 
+            onClick={handleSave}
+            className={`px-4 py-2 rounded ${theme.buttonBackground} ${theme.buttonForeground} hover:${theme.buttonHoverBackground}`}
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const EditorComponent = ({ theme, fontSize = 14 }) => {
   const dispatch = useDispatch();
@@ -46,10 +283,24 @@ const EditorComponent = ({ theme, fontSize = 14 }) => {
   const [tabs, setTabs] = useState([]);
   const [activeTab, setActiveTab] = useState();
   
+  // State for file comparison
+  const [isCompareMode, setIsCompareMode] = useState(false);
+  const [compareFiles, setCompareFiles] = useState(null);
+  const [showCompareModal, setShowCompareModal] = useState(false);
+  
   // Ref for tab container to handle scrolling
   const tabsContainerRef = useRef(null);
   const editorRef = useRef(null);
   const socketRef = useRef(null);
+  
+  // Add new state for modals
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [editorSettings, setEditorSettings] = useState({
+    fontSize: fontSize,
+    wordWrap: 'on',
+    tabSize: 2
+  });
   
   // Initialize socket connection on component mount
   useEffect(() => {
@@ -383,10 +634,59 @@ const EditorComponent = ({ theme, fontSize = 14 }) => {
     }
   };
   
+  // Handle dropdown option selection
+  const handleOptionSelect = (optionId) => {
+    switch (optionId) {
+      case 'compare':
+        setShowCompareModal(true);
+        break;
+      case 'search':
+        setShowSearchModal(true);
+        break;
+      case 'format':
+        // Format current document
+        try {
+          if (editorRef.current) {
+            editorRef.current.getAction('editor.action.formatDocument')?.run();
+          }
+        } catch (error) {
+          console.error('Error formatting document:', error);
+        }
+        break;
+      case 'settings':
+        setShowSettingsModal(true);
+        break;
+      default:
+        break;
+    }
+  };
+  
+  // Update editor settings
+  const handleUpdateSettings = (newSettings) => {
+    setEditorSettings({
+      ...editorSettings,
+      ...newSettings
+    });
+    
+    // Apply new settings to editor if needed
+    if (editorRef.current) {
+      try {
+        // Update editor options
+        editorRef.current.updateOptions({
+          fontSize: newSettings.fontSize,
+          wordWrap: newSettings.wordWrap,
+          tabSize: newSettings.tabSize
+        });
+      } catch (error) {
+        console.error('Error updating editor settings:', error);
+      }
+    }
+  };
+  
   // Get Monaco Editor options for theme
   const getEditorOptions = () => {
     return {
-      fontSize: fontSize,
+      fontSize: editorSettings.fontSize,
       minimap: { enabled: true },
       scrollBeyondLastLine: false,
       automaticLayout: true,
@@ -398,7 +698,8 @@ const EditorComponent = ({ theme, fontSize = 14 }) => {
       },
       lineNumbers: 'on',
       renderLineHighlight: 'all',
-      tabSize: 2,
+      tabSize: editorSettings.tabSize,
+      wordWrap: editorSettings.wordWrap,
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
       fontLigatures: true
     };
@@ -482,7 +783,7 @@ const EditorComponent = ({ theme, fontSize = 14 }) => {
       </div>
     );
   };
-  
+
   return (
     <div className={`flex flex-col h-full flex-1 ${theme.editorBackground}`}>
       {/* Tabs header - only show if there are tabs */}
@@ -544,17 +845,22 @@ const EditorComponent = ({ theme, fontSize = 14 }) => {
             <FaChevronRight className={`text-xs ${theme.iconColor}`} />
           </button>
           
-          {/* Save button */}
+          {/* Save button and dropdown */}
           {activeTab && openFiles[activeTab] && (
-            <button 
-              className={`px-2 py-1 flex items-center justify-center hover:${theme.buttonHoverBackground} transition-colors duration-150`}
-              onClick={handleSaveFile}
-              title="Save file (Ctrl+Alt+S)"
-              disabled={isSaving}
-            >
-              <FaRegSave className={`text-sm ${isSaving ? 'text-green-400 animate-pulse' : theme.iconColor}`} />
-              {/* {isSaving && <span className="ml-1 text-xs text-green-400">Saving...</span>} */}
-            </button>
+            <>
+              <button 
+                className={`px-2 py-1 flex items-center justify-center hover:${theme.buttonHoverBackground} transition-colors duration-150`}
+                onClick={handleSaveFile}
+                title="Save file (Ctrl+Alt+S)"
+                disabled={isSaving}
+              >
+                <FaRegSave className={`text-sm ${isSaving ? 'text-green-400 animate-pulse' : theme.iconColor}`} />
+              </button>
+              <EditorDropdown 
+                theme={theme} 
+                onOptionSelect={handleOptionSelect}
+              />
+            </>
           )}
         </div>
       )}
@@ -562,24 +868,112 @@ const EditorComponent = ({ theme, fontSize = 14 }) => {
       {/* Editor area or welcome screen */}
       <div className="flex-1 overflow-hidden">
         {tabs.length > 0 ? (
-          <Editor
-            height="100%"
-            language={getLanguage()}
-            value={getContent()}
-            onChange={handleEditorChange}
-            theme={getEditorTheme()}
-            options={getEditorOptions()}
-            onMount={handleEditorDidMount}
-            loading={
-              <div className={`flex items-center justify-center h-full ${theme.editorBackground}`}>
-                <div className={`text-sm ${theme.foreground} animate-pulse`}>Loading editor...</div>
-              </div>
-            }
-          />
+          isCompareMode ? (
+            <CompareEditor 
+              theme={theme}
+              fontSize={fontSize}
+              files={compareFiles}
+              onClose={() => {
+                setIsCompareMode(false);
+                setCompareFiles(null);
+              }}
+            />
+          ) : (
+            <Editor
+              height="100%"
+              language={getLanguage()}
+              value={getContent()}
+              onChange={handleEditorChange}
+              theme={getEditorTheme()}
+              options={getEditorOptions()}
+              onMount={handleEditorDidMount}
+              loading={
+                <div className={`flex items-center justify-center h-full ${theme.editorBackground}`}>
+                  <div className={`text-sm ${theme.foreground} animate-pulse`}>Loading editor...</div>
+                </div>
+              }
+            />
+          )
         ) : (
           renderWelcomeScreen()
         )}
       </div>
+      
+      {/* File Compare Modal */}
+      {showCompareModal && (
+        <FileCompareModal 
+          theme={theme}
+          onClose={() => setShowCompareModal(false)}
+          onCompare={(files) => {
+            // Ensure both files are opened and available before proceeding
+            const ensureFilesAreOpen = async () => {
+              try {
+                if (!files || !files.original || !files.modified) {
+                  console.error("Invalid file selection:", files);
+                  alert("Please select both original and modified files to compare.");
+                  return;
+                }
+                
+                console.log("Opening files for comparison:", files);
+                
+                // Make sure the files are opened in the editor
+                if (files.original && !openFiles[files.original]) {
+                  console.log(`Opening original file: ${files.original}`);
+                  try {
+                    await dispatch(readFile(files.original)).unwrap();
+                  } catch (err) {
+                    console.error(`Failed to open original file: ${files.original}`, err);
+                    alert(`Error opening original file: ${files.original.split('/').pop()}`);
+                    return;
+                  }
+                }
+                
+                if (files.modified && !openFiles[files.modified]) {
+                  console.log(`Opening modified file: ${files.modified}`);
+                  try {
+                    await dispatch(readFile(files.modified)).unwrap();
+                  } catch (err) {
+                    console.error(`Failed to open modified file: ${files.modified}`, err);
+                    alert(`Error opening modified file: ${files.modified.split('/').pop()}`);
+                    return;
+                  }
+                }
+                
+                // Now set the comparison files and activate compare mode
+                console.log("Files are now open, proceeding with comparison");
+                setCompareFiles({
+                  original: files.original,
+                  modified: files.modified
+                });
+                setIsCompareMode(true);
+                setShowCompareModal(false);
+              } catch (error) {
+                console.error("Error ensuring files are open:", error);
+                alert(`Failed to open files for comparison: ${error.message || 'Unknown error'}`);
+              }
+            };
+            
+            ensureFilesAreOpen();
+          }}
+        />
+      )}
+      
+      {/* Modals */}
+      {showSearchModal && (
+        <SearchFilesModal
+          theme={theme}
+          onClose={() => setShowSearchModal(false)}
+        />
+      )}
+      
+      {showSettingsModal && (
+        <EditorSettingsModal
+          theme={theme}
+          fontSize={editorSettings.fontSize}
+          onClose={() => setShowSettingsModal(false)}
+          onUpdateSettings={handleUpdateSettings}
+        />
+      )}
     </div>
   );
 };
